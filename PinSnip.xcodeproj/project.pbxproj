@@ -11,10 +11,14 @@
 		06F0774798776FE2119ABF05 /* ScreenCapturePermissionGateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26230B9AA5C567A5EDBF6E66 /* ScreenCapturePermissionGateTests.swift */; };
 		0A97E998742B0E4E2F75C26C /* RGBAColor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28F0B6FA3638D99B59287648 /* RGBAColor.swift */; };
 		18F9A371C68380FFC6B6BAC4 /* SelectionRect.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88665745B20E2C62600A327A /* SelectionRect.swift */; };
+		1971879E5270F84CBA570387 /* LastCaptureRegion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7368D1CC442ABA318B422684 /* LastCaptureRegion.swift */; };
 		1C052DAA5235B1F8AF823BB3 /* CaptureOverlayPresentationPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = C55FB25BFD98B3A38F352E04 /* CaptureOverlayPresentationPolicy.swift */; };
 		217E08A2FF2347C3F1578985 /* SelectionRectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A391BF880E95279E6A8BA83 /* SelectionRectTests.swift */; };
+		23174AF429A24C59FCD0E65D /* SelectionConstraint.swift in Sources */ = {isa = PBXBuildFile; fileRef = D897BD181575A92FBE52C75A /* SelectionConstraint.swift */; };
+		266E803180205334245D585D /* HotKeySettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A3A5F19559BF4B0E4EAB4A /* HotKeySettingsTests.swift */; };
 		285F7B8412819B9323D52AA6 /* Annotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04A047168119D65B67AAEAF0 /* Annotation.swift */; };
 		2FBCB16FC9CEE7A58089DCF0 /* PinTransformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDC7F620CAAEBFE06F43FBA7 /* PinTransformTests.swift */; };
+		2FEA293DF1FDC0AD958A5EDF /* SelectionConstraintTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FB938AF42D9B0DCB63CEB21 /* SelectionConstraintTests.swift */; };
 		33F5A5A39F07F24964C1FC6A /* CoreModule.swift in Sources */ = {isa = PBXBuildFile; fileRef = C8604C0E02CA57406EF483EF /* CoreModule.swift */; };
 		3466A1183680C2E4FBEC606F /* ClipboardCardRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A436E80ACF3A15D08DDB93 /* ClipboardCardRenderer.swift */; };
 		374909F31E34174E4BB6AB4B /* GlobalHotKeyCenter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 401BA4B3B3D0C205727AC2B1 /* GlobalHotKeyCenter.swift */; };
@@ -25,12 +29,15 @@
 		44B70333C2B28F243BABE0EB /* CaptureOutputService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B86BC9966ADF7CC9CCC35EC1 /* CaptureOutputService.swift */; };
 		4D3EDCC7E8C02BB6FBB5AF6F /* PinImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82F8D2B506D87B44973CF59 /* PinImageView.swift */; };
 		4EE9688ABE9B39EE398EAA79 /* PinSnipCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		5F2DC2529D927D6D4A084BA4 /* HotKeySettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51886B69685ED033F1DF4201 /* HotKeySettingsWindowController.swift */; };
 		6DA21D4F05339256C9E36772 /* AnnotationRendererTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1F58D7FAE9449D729C7DA /* AnnotationRendererTests.swift */; };
 		6F084FB3B44575C69394D88F /* ClipboardReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D57DD6717549BFB2C1C46CD /* ClipboardReader.swift */; };
 		71AE6462D47BED4C5DF427D6 /* ScreenCapturePermissionGate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CFCA0B83F7A2E490CD6850A /* ScreenCapturePermissionGate.swift */; };
 		74ED14A8AAF365F8FDFBB787 /* AnnotationDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E25A6B0787938CF9426446 /* AnnotationDocument.swift */; };
 		787401C97DF8BF6574DAA11B /* DisplayCoordinateMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */; };
 		7D919906976DD27307F12E9B /* AppCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA4DC85CCED1ECF8B949A7 /* AppCommandTests.swift */; };
+		837861D79583218CCF5CB1AF /* HotKeyShortcut+AppKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11190C9BE08E9379F1737AC /* HotKeyShortcut+AppKit.swift */; };
+		860079BEEAA147AFA2A30789 /* HotKeyRecorderControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA325E9A2B8BB7EC68876BA /* HotKeyRecorderControl.swift */; };
 		8ACFCCAD8B23C7D5E4409DCD /* PinSnipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC13D1DC73FF652B0AB058F /* PinSnipApp.swift */; };
 		913AB3DE332B5C42678EFD81 /* DisplayCoordinateMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */; };
 		9253CD643FB23E25EC693B27 /* PinSnipCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; };
@@ -38,6 +45,8 @@
 		A2D6E9B07074490C7B042C5E /* PinSnipCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; };
 		AB8798D28FB7DC327A49AF0F /* AnnotationDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4545ECE8D3CD0A997664F07 /* AnnotationDocumentTests.swift */; };
 		B023139AB62E5078F233A363 /* SelectionOverlayController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 73801D1344E2FD60B819443F /* SelectionOverlayController.swift */; };
+		B7FAD08C20BA6AA703F68B48 /* LastCaptureRegionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B4D1D5409543C375B7775EE /* LastCaptureRegionTests.swift */; };
+		C5FE2E34AA86C2BD009FB96F /* HotKeySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */; };
 		DA7E7E5DE862E6FF8CFAE60F /* SelectionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8C822A92EACB2D6CFEA5D1 /* SelectionOverlayView.swift */; };
 		DD8CC13CB1DB34F94DBFBAAA /* PinWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F979661D090172118AF011DD /* PinWindowManager.swift */; };
 		E31B3CBE3BDCC0EA031C0322 /* AnnotationTransformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE7FF92AF2AB02E37A4DB6B /* AnnotationTransformTests.swift */; };
@@ -99,12 +108,18 @@
 		1EC13D1DC73FF652B0AB058F /* PinSnipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinSnipApp.swift; sourceTree = "<group>"; };
 		26230B9AA5C567A5EDBF6E66 /* ScreenCapturePermissionGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturePermissionGateTests.swift; sourceTree = "<group>"; };
 		28F0B6FA3638D99B59287648 /* RGBAColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RGBAColor.swift; sourceTree = "<group>"; };
+		3B4D1D5409543C375B7775EE /* LastCaptureRegionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastCaptureRegionTests.swift; sourceTree = "<group>"; };
 		401BA4B3B3D0C205727AC2B1 /* GlobalHotKeyCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyCenter.swift; sourceTree = "<group>"; };
 		491A1CAF46A991C82BD517A1 /* AnnotationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRenderer.swift; sourceTree = "<group>"; };
+		51886B69685ED033F1DF4201 /* HotKeySettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeySettingsWindowController.swift; sourceTree = "<group>"; };
+		63A3A5F19559BF4B0E4EAB4A /* HotKeySettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeySettingsTests.swift; sourceTree = "<group>"; };
+		7368D1CC442ABA318B422684 /* LastCaptureRegion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastCaptureRegion.swift; sourceTree = "<group>"; };
 		73801D1344E2FD60B819443F /* SelectionOverlayController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlayController.swift; sourceTree = "<group>"; };
 		778BA8D913F725B856236B1B /* PinTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinTransform.swift; sourceTree = "<group>"; };
+		796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeySettings.swift; sourceTree = "<group>"; };
 		81E25A6B0787938CF9426446 /* AnnotationDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationDocument.swift; sourceTree = "<group>"; };
 		88665745B20E2C62600A327A /* SelectionRect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionRect.swift; sourceTree = "<group>"; };
+		8FB938AF42D9B0DCB63CEB21 /* SelectionConstraintTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionConstraintTests.swift; sourceTree = "<group>"; };
 		90ED332A131539ED632C4889 /* CaptureOverlayPresentationPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOverlayPresentationPolicyTests.swift; sourceTree = "<group>"; };
 		9BE7FF92AF2AB02E37A4DB6B /* AnnotationTransformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationTransformTests.swift; sourceTree = "<group>"; };
 		9D57DD6717549BFB2C1C46CD /* ClipboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardReader.swift; sourceTree = "<group>"; };
@@ -119,15 +134,18 @@
 		B83AA5D9153BCB34617FE4BB /* ClipboardReaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardReaderTests.swift; sourceTree = "<group>"; };
 		B86BC9966ADF7CC9CCC35EC1 /* CaptureOutputService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOutputService.swift; sourceTree = "<group>"; };
 		B91BF7C5FAA03247472CE520 /* ClipboardPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardPayload.swift; sourceTree = "<group>"; };
+		BEA325E9A2B8BB7EC68876BA /* HotKeyRecorderControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeyRecorderControl.swift; sourceTree = "<group>"; };
 		C55FB25BFD98B3A38F352E04 /* CaptureOverlayPresentationPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureOverlayPresentationPolicy.swift; sourceTree = "<group>"; };
 		C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCoordinateMapperTests.swift; sourceTree = "<group>"; };
 		C8604C0E02CA57406EF483EF /* CoreModule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreModule.swift; sourceTree = "<group>"; };
 		CA75E5EA8D8F164E250A0BE3 /* AppCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommand.swift; sourceTree = "<group>"; };
 		CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PinSnipCore.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		D4EAF04D2631B7A055439BF2 /* PinWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinWindowController.swift; sourceTree = "<group>"; };
+		D897BD181575A92FBE52C75A /* SelectionConstraint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionConstraint.swift; sourceTree = "<group>"; };
 		DB899DB4D201EB4C0940ED95 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		E4545ECE8D3CD0A997664F07 /* AnnotationDocumentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationDocumentTests.swift; sourceTree = "<group>"; };
 		ECA0A7270F1D2FDA1C4A2F7A /* PinSnip.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PinSnip.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F11190C9BE08E9379F1737AC /* HotKeyShortcut+AppKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "HotKeyShortcut+AppKit.swift"; sourceTree = "<group>"; };
 		F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayCoordinateMapper.swift; sourceTree = "<group>"; };
 		F979661D090172118AF011DD /* PinWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinWindowManager.swift; sourceTree = "<group>"; };
 		FDC7F620CAAEBFE06F43FBA7 /* PinTransformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinTransformTests.swift; sourceTree = "<group>"; };
@@ -209,8 +227,11 @@
 				1100B38E7DB377D3BC50BEDD /* ClipboardPayloadTests.swift */,
 				B83AA5D9153BCB34617FE4BB /* ClipboardReaderTests.swift */,
 				C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */,
+				63A3A5F19559BF4B0E4EAB4A /* HotKeySettingsTests.swift */,
+				3B4D1D5409543C375B7775EE /* LastCaptureRegionTests.swift */,
 				FDC7F620CAAEBFE06F43FBA7 /* PinTransformTests.swift */,
 				26230B9AA5C567A5EDBF6E66 /* ScreenCapturePermissionGateTests.swift */,
+				8FB938AF42D9B0DCB63CEB21 /* SelectionConstraintTests.swift */,
 				1A391BF880E95279E6A8BA83 /* SelectionRectTests.swift */,
 			);
 			path = PinSnipTests;
@@ -267,6 +288,9 @@
 			isa = PBXGroup;
 			children = (
 				401BA4B3B3D0C205727AC2B1 /* GlobalHotKeyCenter.swift */,
+				BEA325E9A2B8BB7EC68876BA /* HotKeyRecorderControl.swift */,
+				51886B69685ED033F1DF4201 /* HotKeySettingsWindowController.swift */,
+				F11190C9BE08E9379F1737AC /* HotKeyShortcut+AppKit.swift */,
 			);
 			path = Hotkeys;
 			sourceTree = "<group>";
@@ -278,9 +302,12 @@
 				C55FB25BFD98B3A38F352E04 /* CaptureOverlayPresentationPolicy.swift */,
 				C8604C0E02CA57406EF483EF /* CoreModule.swift */,
 				F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */,
+				796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */,
+				7368D1CC442ABA318B422684 /* LastCaptureRegion.swift */,
 				778BA8D913F725B856236B1B /* PinTransform.swift */,
 				28F0B6FA3638D99B59287648 /* RGBAColor.swift */,
 				0CFCA0B83F7A2E490CD6850A /* ScreenCapturePermissionGate.swift */,
+				D897BD181575A92FBE52C75A /* SelectionConstraint.swift */,
 				88665745B20E2C62600A327A /* SelectionRect.swift */,
 			);
 			path = Core;
@@ -391,6 +418,9 @@
 				44B70333C2B28F243BABE0EB /* CaptureOutputService.swift in Sources */,
 				3466A1183680C2E4FBEC606F /* ClipboardCardRenderer.swift in Sources */,
 				374909F31E34174E4BB6AB4B /* GlobalHotKeyCenter.swift in Sources */,
+				860079BEEAA147AFA2A30789 /* HotKeyRecorderControl.swift in Sources */,
+				5F2DC2529D927D6D4A084BA4 /* HotKeySettingsWindowController.swift in Sources */,
+				837861D79583218CCF5CB1AF /* HotKeyShortcut+AppKit.swift in Sources */,
 				4D3EDCC7E8C02BB6FBB5AF6F /* PinImageView.swift in Sources */,
 				8ACFCCAD8B23C7D5E4409DCD /* PinSnipApp.swift in Sources */,
 				9E32AC4459A625C3C3450646 /* PinWindowController.swift in Sources */,
@@ -414,9 +444,12 @@
 				6F084FB3B44575C69394D88F /* ClipboardReader.swift in Sources */,
 				33F5A5A39F07F24964C1FC6A /* CoreModule.swift in Sources */,
 				913AB3DE332B5C42678EFD81 /* DisplayCoordinateMapper.swift in Sources */,
+				C5FE2E34AA86C2BD009FB96F /* HotKeySettings.swift in Sources */,
+				1971879E5270F84CBA570387 /* LastCaptureRegion.swift in Sources */,
 				FFB9D686CE905A94ADD319CB /* PinTransform.swift in Sources */,
 				0A97E998742B0E4E2F75C26C /* RGBAColor.swift in Sources */,
 				71AE6462D47BED4C5DF427D6 /* ScreenCapturePermissionGate.swift in Sources */,
+				23174AF429A24C59FCD0E65D /* SelectionConstraint.swift in Sources */,
 				18F9A371C68380FFC6B6BAC4 /* SelectionRect.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -433,8 +466,11 @@
 				F6C0B53DFB082B26B76D2EBB /* ClipboardPayloadTests.swift in Sources */,
 				3CC46B165DF994D36050263F /* ClipboardReaderTests.swift in Sources */,
 				787401C97DF8BF6574DAA11B /* DisplayCoordinateMapperTests.swift in Sources */,
+				266E803180205334245D585D /* HotKeySettingsTests.swift in Sources */,
+				B7FAD08C20BA6AA703F68B48 /* LastCaptureRegionTests.swift in Sources */,
 				2FBCB16FC9CEE7A58089DCF0 /* PinTransformTests.swift in Sources */,
 				06F0774798776FE2119ABF05 /* ScreenCapturePermissionGateTests.swift in Sources */,
+				2FEA293DF1FDC0AD958A5EDF /* SelectionConstraintTests.swift in Sources */,
 				217E08A2FF2347C3F1578985 /* SelectionRectTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

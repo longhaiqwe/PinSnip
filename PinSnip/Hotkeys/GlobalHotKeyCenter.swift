@@ -1,5 +1,6 @@
 import Carbon
 import Foundation
+import PinSnipCore
 
 @MainActor
 final class GlobalHotKeyCenter {
@@ -11,6 +12,7 @@ final class GlobalHotKeyCenter {
     private let handler: (Identifier) -> Void
     private var hotKeys: [Identifier: EventHotKeyRef] = [:]
     private var eventHandler: EventHandlerRef?
+    private var activeSettings: HotKeySettings?
     private let signature: OSType = 0x504E5350
 
     init(handler: @escaping (Identifier) -> Void) {
@@ -19,29 +21,56 @@ final class GlobalHotKeyCenter {
     }
 
     @discardableResult
-    func registerDefaults() -> Bool {
-        let capture = register(.capture, keyCode: UInt32(kVK_ANSI_1), modifiers: UInt32(controlKey | shiftKey))
-        let paste = register(.paste, keyCode: UInt32(kVK_ANSI_2), modifiers: UInt32(controlKey | shiftKey))
-        return capture && paste
+    func register(_ settings: HotKeySettings) -> Bool {
+        guard settings.isValid else { return false }
+        let previousSettings = activeSettings
+
+        unregisterHotKeys()
+        if registerAll(settings) {
+            activeSettings = settings
+            return true
+        }
+
+        unregisterHotKeys()
+        if let previousSettings {
+            if registerAll(previousSettings) {
+                activeSettings = previousSettings
+            } else {
+                unregisterHotKeys()
+                activeSettings = nil
+            }
+        }
+        return false
     }
 
     func shutdown() {
-        for reference in hotKeys.values {
-            UnregisterEventHotKey(reference)
-        }
-        hotKeys.removeAll()
+        unregisterHotKeys()
+        activeSettings = nil
         if let eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
         }
     }
 
-    private func register(_ identifier: Identifier, keyCode: UInt32, modifiers: UInt32) -> Bool {
+    private func registerAll(_ settings: HotKeySettings) -> Bool {
+        let capture = register(.capture, shortcut: settings.capture)
+        let paste = register(.paste, shortcut: settings.paste)
+        return capture && paste
+    }
+
+    private func unregisterHotKeys() {
+        for reference in hotKeys.values {
+            UnregisterEventHotKey(reference)
+        }
+        hotKeys.removeAll()
+    }
+
+    private func register(_ identifier: Identifier, shortcut: HotKeyShortcut) -> Bool {
         var reference: EventHotKeyRef?
         let hotKeyID = EventHotKeyID(signature: signature, id: identifier.rawValue)
         let status = RegisterEventHotKey(
-            keyCode,
-            modifiers,
+            UInt32(shortcut.keyCode),
+            shortcut.modifiers.carbonValue,
             hotKeyID,
             GetApplicationEventTarget(),
             0,
@@ -88,3 +117,13 @@ final class GlobalHotKeyCenter {
     }
 }
 
+private extension HotKeyModifiers {
+    var carbonValue: UInt32 {
+        var value: UInt32 = 0
+        if contains(.command) { value |= UInt32(cmdKey) }
+        if contains(.option) { value |= UInt32(optionKey) }
+        if contains(.control) { value |= UInt32(controlKey) }
+        if contains(.shift) { value |= UInt32(shiftKey) }
+        return value
+    }
+}

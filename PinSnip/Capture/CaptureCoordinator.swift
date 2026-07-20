@@ -93,7 +93,7 @@ final class CaptureCoordinator {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "需要开启屏幕录制权限"
-        alert.informativeText = "macOS 需要你在系统设置中手动允许 PinSnip。开启后请退出并重新打开 PinSnip，再按 ⌃⇧1 截图。"
+        alert.informativeText = "macOS 需要你在系统设置中手动允许 PinSnip。开启后请退出并重新打开 PinSnip，再按截图快捷键。"
         alert.addButton(withTitle: "打开系统设置")
         alert.addButton(withTitle: "稍后")
         if runForeground(alert) == .alertFirstButtonReturn {
