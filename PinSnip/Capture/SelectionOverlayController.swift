@@ -6,7 +6,10 @@ final class SelectionOverlayController: NSWindowController {
     init(
         screen: NSScreen,
         screenshot: CGImage,
-        onResult: @escaping (CGImage, CaptureResultAction) -> Void,
+        windowCandidates: [WindowCandidate],
+        initialPointer: CGPoint,
+        initialSelectionRect: CGRect,
+        onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
         let panel = CapturePanel(
@@ -19,6 +22,9 @@ final class SelectionOverlayController: NSWindowController {
         let overlay = SelectionOverlayView(
             frame: NSRect(origin: .zero, size: screen.frame.size),
             screenshot: screenshot,
+            windowCandidates: windowCandidates,
+            initialPointer: initialPointer,
+            initialSelectionRect: initialSelectionRect,
             onResult: onResult,
             onCancel: onCancel
         )

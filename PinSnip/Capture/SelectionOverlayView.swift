@@ -11,13 +11,37 @@ enum CaptureResultAction {
 final class SelectionOverlayView: NSView {
     private enum Phase { case selecting, editing }
     private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3, number = 4 }
+    private enum AspectRatioOption: Int, CaseIterable {
+        case free
+        case square
+        case fourThree
+        case sixteenNine
+
+        var title: String {
+            switch self {
+            case .free: "自由"
+            case .square: "1:1"
+            case .fourThree: "4:3"
+            case .sixteenNine: "16:9"
+            }
+        }
+
+        var constraint: SelectionConstraint? {
+            switch self {
+            case .free: nil
+            case .square: SelectionConstraint(aspectRatio: 1)
+            case .fourThree: SelectionConstraint(aspectRatio: 4.0 / 3.0)
+            case .sixteenNine: SelectionConstraint(aspectRatio: 16.0 / 9.0)
+            }
+        }
+    }
 
     private let screenshot: CGImage
-    private let onResult: (CGImage, CaptureResultAction) -> Void
+    private let onResult: (CGImage, CGRect, CaptureResultAction) -> Void
     private let onCancel: () -> Void
     private var phase = Phase.selecting
-    private var selectionStart: CGPoint?
-    private var selectionRect = CGRect.zero
+    private var selectionState: WindowSelectionState
+    private var selectionRect: CGRect { selectionState.rect }
     private var tool = Tool.rectangle
     private var annotationStart: CGPoint?
     private var currentAnnotation: Annotation?
@@ -25,21 +49,41 @@ final class SelectionOverlayView: NSView {
     private var document = AnnotationDocument()
     private let toolbar = NSVisualEffectView()
     private let stack = NSStackView()
+    private let selectionOptionsBar = NSVisualEffectView()
+    private let selectionOptionsStack = NSStackView()
+    private let aspectRatioPopUp = NSPopUpButton()
+    private var aspectRatioOption = AspectRatioOption.free
     private var toolButtons: [Tool: NSButton] = [:]
     private let accent = RGBAColor(red: 0.98, green: 0.31, blue: 0.24)
 
     init(
         frame frameRect: NSRect,
         screenshot: CGImage,
-        onResult: @escaping (CGImage, CaptureResultAction) -> Void,
+        windowCandidates: [WindowCandidate],
+        initialPointer: CGPoint,
+        initialSelectionRect: CGRect,
+        onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.screenshot = screenshot
         self.onResult = onResult
         self.onCancel = onCancel
+        var selectionState = WindowSelectionState(
+            candidates: windowCandidates,
+            initialRect: initialSelectionRect
+        )
+        if initialSelectionRect.isEmpty {
+            selectionState.hover(at: initialPointer)
+        }
+        self.selectionState = selectionState
         super.init(frame: frameRect)
+        phase = initialSelectionRect.isEmpty ? .selecting : .editing
         wantsLayer = true
         configureToolbar()
+        configureSelectionOptionsBar()
+        toolbar.isHidden = phase == .selecting
+        selectionOptionsBar.isHidden = phase == .editing
+        if phase == .editing { updateToolButtons() }
     }
 
     @available(*, unavailable)
@@ -49,6 +93,7 @@ final class SelectionOverlayView: NSView {
 
     override func layout() {
         super.layout()
+        layoutSelectionOptionsBar()
         layoutToolbar()
     }
 
@@ -57,8 +102,6 @@ final class SelectionOverlayView: NSView {
         image.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
 
         if selectionRect.isEmpty {
-            NSColor.black.withAlphaComponent(0.34).setFill()
-            bounds.fill()
             drawCrosshair(at: window?.mouseLocationOutsideOfEventStream ?? .zero)
             return
         }
@@ -66,7 +109,9 @@ final class SelectionOverlayView: NSView {
         let mask = NSBezierPath(rect: bounds)
         mask.appendRect(selectionRect)
         mask.windingRule = .evenOdd
-        NSColor.black.withAlphaComponent(0.38).setFill()
+        NSColor.black.withAlphaComponent(
+            CaptureOverlayPresentationPolicy.dimmingOpacity(hasSelection: true)
+        ).setFill()
         mask.fill()
 
         NSColor.systemCyan.setStroke()
@@ -87,8 +132,7 @@ final class SelectionOverlayView: NSView {
         let point = convert(event.locationInWindow, from: nil)
         switch phase {
         case .selecting:
-            selectionStart = point
-            selectionRect = .zero
+            selectionState.begin(at: point)
             toolbar.isHidden = true
         case .editing:
             guard selectionRect.contains(point) else { return }
@@ -103,8 +147,11 @@ final class SelectionOverlayView: NSView {
         let point = bounded(convert(event.locationInWindow, from: nil))
         switch phase {
         case .selecting:
-            guard let start = selectionStart else { return }
-            selectionRect = SelectionRect(start: start, end: point).clamped(to: bounds).rect
+            selectionState.drag(
+                to: point,
+                inside: bounds,
+                constraint: aspectRatioOption.constraint
+            )
         case .editing:
             guard let start = annotationStart else { return }
             if tool == .pencil {
@@ -118,14 +165,13 @@ final class SelectionOverlayView: NSView {
     override func mouseUp(with event: NSEvent) {
         switch phase {
         case .selecting:
-            selectionStart = nil
-            guard selectionRect.width >= 3, selectionRect.height >= 3 else {
-                selectionRect = .zero
+            guard selectionState.end(minimumDimension: 3) else {
                 needsDisplay = true
                 return
             }
             phase = .editing
             toolbar.isHidden = false
+            selectionOptionsBar.isHidden = true
             updateToolButtons()
             needsLayout = true
         case .editing:
@@ -140,7 +186,9 @@ final class SelectionOverlayView: NSView {
     }
 
     override func mouseMoved(with event: NSEvent) {
-        if phase == .selecting { needsDisplay = true }
+        guard phase == .selecting else { return }
+        selectionState.hover(at: bounded(convert(event.locationInWindow, from: nil)))
+        needsDisplay = true
     }
 
     override func keyDown(with event: NSEvent) {
@@ -188,6 +236,41 @@ final class SelectionOverlayView: NSView {
         stack.addArrangedSubview(button(symbol: "square.and.arrow.down", help: "保存", tag: 21))
         stack.addArrangedSubview(button(symbol: "pin", help: "贴到屏幕", tag: 22))
         stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
+    }
+
+    private func configureSelectionOptionsBar() {
+        selectionOptionsBar.material = .hudWindow
+        selectionOptionsBar.blendingMode = .withinWindow
+        selectionOptionsBar.state = .active
+        selectionOptionsBar.wantsLayer = true
+        selectionOptionsBar.layer?.cornerRadius = 10
+        selectionOptionsBar.layer?.masksToBounds = true
+
+        selectionOptionsStack.orientation = .horizontal
+        selectionOptionsStack.alignment = .centerY
+        selectionOptionsStack.spacing = 8
+        selectionOptionsStack.edgeInsets = NSEdgeInsets(top: 7, left: 10, bottom: 7, right: 10)
+
+        let label = NSTextField(labelWithString: "选区比例")
+        label.textColor = .labelColor
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        selectionOptionsStack.addArrangedSubview(label)
+
+        aspectRatioPopUp.addItems(withTitles: AspectRatioOption.allCases.map(\.title))
+        aspectRatioPopUp.selectItem(at: aspectRatioOption.rawValue)
+        aspectRatioPopUp.target = self
+        aspectRatioPopUp.action = #selector(aspectRatioChanged(_:))
+        aspectRatioPopUp.toolTip = "拖动前选择固定长宽比"
+        aspectRatioPopUp.widthAnchor.constraint(equalToConstant: 88).isActive = true
+        selectionOptionsStack.addArrangedSubview(aspectRatioPopUp)
+
+        selectionOptionsBar.addSubview(selectionOptionsStack)
+        addSubview(selectionOptionsBar)
+    }
+
+    @objc private func aspectRatioChanged(_ sender: NSPopUpButton) {
+        guard let option = AspectRatioOption(rawValue: sender.indexOfSelectedItem) else { return }
+        aspectRatioOption = option
     }
 
     private func addToolButton(_ tool: Tool, symbol: String, help: String) {
@@ -251,6 +334,20 @@ final class SelectionOverlayView: NSView {
         if y < 10 { y = min(bounds.maxY - height - 10, selectionRect.maxY + 10) }
         toolbar.frame = NSRect(x: x, y: y, width: width, height: height)
         stack.frame = toolbar.bounds
+    }
+
+    private func layoutSelectionOptionsBar() {
+        guard !selectionOptionsBar.isHidden else { return }
+        let desired = selectionOptionsStack.fittingSize
+        let width = desired.width
+        let height = max(38, desired.height)
+        selectionOptionsBar.frame = NSRect(
+            x: max(12, bounds.midX - width / 2),
+            y: bounds.maxY - height - 18,
+            width: width,
+            height: height
+        )
+        selectionOptionsStack.frame = selectionOptionsBar.bounds
     }
 
     private func annotation(from start: CGPoint, to end: CGPoint) -> Annotation {
@@ -368,7 +465,7 @@ final class SelectionOverlayView: NSView {
             NSSound.beep()
             return
         }
-        onResult(result, action)
+        onResult(result, selectionRect, action)
     }
 
     private func drawSizeLabel() {

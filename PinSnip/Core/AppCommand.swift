@@ -2,6 +2,7 @@ import Foundation
 
 public enum AppCommand: Equatable, Sendable {
     case capture
+    case captureLastRegion
     case paste
     case showAllPins
     case hideAllPins

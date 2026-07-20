@@ -18,7 +18,7 @@
 - Test: `PinSnipTests/SelectionConstraintTests.swift`
 - Test: `PinSnipTests/LastCaptureRegionTests.swift`
 
-- [ ] **Step 1: Write failing behavior tests**
+- [x] **Step 1: Write failing behavior tests**
 
 ```swift
 func testSquareConstraintPreservesDragDirection() {
@@ -38,16 +38,16 @@ func testNormalizedRegionRoundTripsOnDifferentScreenSize() {
 }
 ```
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
 Run: `xcodebuild test -project PinSnip.xcodeproj -scheme PinSnip -destination 'platform=macOS' -only-testing:PinSnipTests/SelectionConstraintTests -only-testing:PinSnipTests/LastCaptureRegionTests CODE_SIGNING_ALLOWED=NO`
 Expected: FAIL because both types are missing.
 
-- [ ] **Step 3: Implement constrained geometry and normalized storage**
+- [x] **Step 3: Implement constrained geometry and normalized storage**
 
 `SelectionConstraint` derives height from the dominant horizontal drag while keeping the original quadrant, then clamps the result to screen bounds. `LastCaptureRegion` stores x/y/width/height as 0...1 fractions and reconstructs a point-space rectangle for the current display size.
 
-- [ ] **Step 4: Verify GREEN**
+- [x] **Step 4: Verify GREEN**
 
 Run: `xcodebuild test -project PinSnip.xcodeproj -scheme PinSnip -destination 'platform=macOS' -only-testing:PinSnipTests/SelectionConstraintTests -only-testing:PinSnipTests/LastCaptureRegionTests CODE_SIGNING_ALLOWED=NO`
 Expected: TEST SUCCEEDED.
@@ -157,11 +157,11 @@ Expected: TEST SUCCEEDED.
 - Modify: `PinSnip/Capture/SelectionOverlayController.swift`
 - Modify: `PinSnip/Capture/CaptureCoordinator.swift`
 
-- [ ] **Step 1: Add overlay state tests to the pure models**
+- [x] **Step 1: Add overlay state tests to the pure models**
 
 Extend the Task 1 tests with 4:3, 16:9, reverse-direction, and bounds-clamping cases before changing the overlay.
 
-- [ ] **Step 2: Verify the new cases fail if the constraint behavior is incomplete**
+- [x] **Step 2: Verify the new cases fail if the constraint behavior is incomplete**
 
 Run: `xcodebuild test -project PinSnip.xcodeproj -scheme PinSnip -destination 'platform=macOS' -only-testing:PinSnipTests/SelectionConstraintTests CODE_SIGNING_ALLOWED=NO`
 Expected: the new boundary case fails before its implementation is added.

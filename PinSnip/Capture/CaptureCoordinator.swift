@@ -4,10 +4,12 @@ import PinSnipCore
 @MainActor
 final class CaptureCoordinator {
     private let captureService = ScreenCaptureService()
+    private let windowDetector = WindowDetector()
     private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
     private var overlay: SelectionOverlayController?
     private var isCapturing = false
+    private var lastCaptureRegion: LastCaptureRegion?
 
     init(
         pinManager: PinWindowManager,
@@ -20,6 +22,18 @@ final class CaptureCoordinator {
     }
 
     func startCapture() {
+        startCapture(restoring: nil)
+    }
+
+    func startLastRegionCapture() {
+        guard let lastCaptureRegion else {
+            NSSound.beep()
+            return
+        }
+        startCapture(restoring: lastCaptureRegion)
+    }
+
+    private func startCapture(restoring region: LastCaptureRegion?) {
         guard !isCapturing else { return }
         guard permissionGate.ensureAuthorized() else {
             presentScreenCapturePermissionRequired()
@@ -33,7 +47,7 @@ final class CaptureCoordinator {
         Task {
             do {
                 let image = try await captureService.capture(screen)
-                presentOverlay(screen: screen, screenshot: image)
+                presentOverlay(screen: screen, screenshot: image, restoring: region)
             } catch {
                 isCapturing = false
                 presentCaptureError(error)
@@ -41,12 +55,31 @@ final class CaptureCoordinator {
         }
     }
 
-    private func presentOverlay(screen: NSScreen, screenshot: CGImage) {
+    private func presentOverlay(
+        screen: NSScreen,
+        screenshot: CGImage,
+        restoring region: LastCaptureRegion?
+    ) {
+        let candidates = windowDetector.candidates(on: screen)
+        let mouseLocation = NSEvent.mouseLocation
+        let initialPointer = CGPoint(
+            x: mouseLocation.x - screen.frame.minX,
+            y: mouseLocation.y - screen.frame.minY
+        )
+        let initialSelectionRect = region?.rect(in: screen.frame.size) ?? .zero
         let controller = SelectionOverlayController(
             screen: screen,
             screenshot: screenshot,
-            onResult: { [weak self] image, action in
-                self?.complete(image: image, action: action)
+            windowCandidates: candidates,
+            initialPointer: initialPointer,
+            initialSelectionRect: initialSelectionRect,
+            onResult: { [weak self] image, selectionRect, action in
+                self?.complete(
+                    image: image,
+                    selectionRect: selectionRect,
+                    screenSize: screen.frame.size,
+                    action: action
+                )
             },
             onCancel: { [weak self] in self?.cancel() }
         )
@@ -54,7 +87,13 @@ final class CaptureCoordinator {
         controller.present()
     }
 
-    private func complete(image: CGImage, action: CaptureResultAction) {
+    private func complete(
+        image: CGImage,
+        selectionRect: CGRect,
+        screenSize: CGSize,
+        action: CaptureResultAction
+    ) {
+        lastCaptureRegion = LastCaptureRegion(rect: selectionRect, screenSize: screenSize)
         dismissOverlay()
         switch action {
         case .copy: CaptureOutputService.copy(image)

@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func capture() { router.perform(.capture) }
+    @objc private func captureLastRegion() { router.perform(.captureLastRegion) }
     @objc private func paste() { router.perform(.paste) }
     @objc private func showPins() { router.perform(.showAllPins) }
     @objc private func hidePins() { router.perform(.hideAllPins) }
@@ -60,6 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func perform(_ command: AppCommand) {
         switch command {
         case .capture: captureCoordinator.startCapture()
+        case .captureLastRegion: captureCoordinator.startLastRegionCapture()
         case .paste: pinManager.pinClipboard()
         case .showAllPins: pinManager.showAll()
         case .hideAllPins: pinManager.hideAll()
@@ -83,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         captureMenuItem = captureItem
         pasteMenuItem = pasteItem
         menu.addItem(captureItem)
+        menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
         menu.addItem(.separator())
