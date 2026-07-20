@@ -1,0 +1,358 @@
+import AppKit
+import PinSnipCore
+
+enum CaptureResultAction {
+    case copy
+    case save
+    case pin
+}
+
+@MainActor
+final class SelectionOverlayView: NSView {
+    private enum Phase { case selecting, editing }
+    private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3 }
+
+    private let screenshot: CGImage
+    private let onResult: (CGImage, CaptureResultAction) -> Void
+    private let onCancel: () -> Void
+    private var phase = Phase.selecting
+    private var selectionStart: CGPoint?
+    private var selectionRect = CGRect.zero
+    private var tool = Tool.rectangle
+    private var annotationStart: CGPoint?
+    private var currentAnnotation: Annotation?
+    private var pencilPoints: [CGPoint] = []
+    private var document = AnnotationDocument()
+    private let toolbar = NSVisualEffectView()
+    private let stack = NSStackView()
+    private var toolButtons: [Tool: NSButton] = [:]
+    private let accent = RGBAColor(red: 0.98, green: 0.31, blue: 0.24)
+
+    init(
+        frame frameRect: NSRect,
+        screenshot: CGImage,
+        onResult: @escaping (CGImage, CaptureResultAction) -> Void,
+        onCancel: @escaping () -> Void
+    ) {
+        self.screenshot = screenshot
+        self.onResult = onResult
+        self.onCancel = onCancel
+        super.init(frame: frameRect)
+        wantsLayer = true
+        configureToolbar()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func layout() {
+        super.layout()
+        layoutToolbar()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let image = NSImage(cgImage: screenshot, size: bounds.size)
+        image.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
+
+        if selectionRect.isEmpty {
+            NSColor.black.withAlphaComponent(0.34).setFill()
+            bounds.fill()
+            drawCrosshair(at: window?.mouseLocationOutsideOfEventStream ?? .zero)
+            return
+        }
+
+        let mask = NSBezierPath(rect: bounds)
+        mask.appendRect(selectionRect)
+        mask.windingRule = .evenOdd
+        NSColor.black.withAlphaComponent(0.38).setFill()
+        mask.fill()
+
+        NSColor.systemCyan.setStroke()
+        let border = NSBezierPath(rect: selectionRect.insetBy(dx: 0.5, dy: 0.5))
+        border.lineWidth = 1
+        border.stroke()
+
+        for annotation in document.annotations {
+            draw(annotation)
+        }
+        if let currentAnnotation {
+            draw(currentAnnotation)
+        }
+        drawSizeLabel()
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        switch phase {
+        case .selecting:
+            selectionStart = point
+            selectionRect = .zero
+            toolbar.isHidden = true
+        case .editing:
+            guard selectionRect.contains(point) else { return }
+            annotationStart = point
+            pencilPoints = [point]
+            currentAnnotation = annotation(from: point, to: point)
+        }
+        needsDisplay = true
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        let point = bounded(convert(event.locationInWindow, from: nil))
+        switch phase {
+        case .selecting:
+            guard let start = selectionStart else { return }
+            selectionRect = SelectionRect(start: start, end: point).clamped(to: bounds).rect
+        case .editing:
+            guard let start = annotationStart else { return }
+            if tool == .pencil {
+                pencilPoints.append(point)
+            }
+            currentAnnotation = annotation(from: start, to: point)
+        }
+        needsDisplay = true
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        switch phase {
+        case .selecting:
+            selectionStart = nil
+            guard selectionRect.width >= 3, selectionRect.height >= 3 else {
+                selectionRect = .zero
+                needsDisplay = true
+                return
+            }
+            phase = .editing
+            toolbar.isHidden = false
+            updateToolButtons()
+            needsLayout = true
+        case .editing:
+            if let currentAnnotation {
+                document.append(currentAnnotation)
+            }
+            annotationStart = nil
+            currentAnnotation = nil
+            pencilPoints.removeAll()
+        }
+        needsDisplay = true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        if phase == .selecting { needsDisplay = true }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            onCancel()
+            return
+        }
+        if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
+            event.modifierFlags.contains(.shift) ? document.redo() : document.undo()
+            needsDisplay = true
+            return
+        }
+        if event.keyCode == 36 {
+            finish(.copy)
+            return
+        }
+        super.keyDown(with: event)
+    }
+
+    private func configureToolbar() {
+        toolbar.material = .hudWindow
+        toolbar.blendingMode = .withinWindow
+        toolbar.state = .active
+        toolbar.wantsLayer = true
+        toolbar.layer?.cornerRadius = 12
+        toolbar.layer?.masksToBounds = true
+        toolbar.isHidden = true
+
+        stack.orientation = .horizontal
+        stack.alignment = .centerY
+        stack.spacing = 4
+        stack.edgeInsets = NSEdgeInsets(top: 6, left: 7, bottom: 6, right: 7)
+        toolbar.addSubview(stack)
+        addSubview(toolbar)
+
+        addToolButton(.rectangle, symbol: "rectangle", help: "矩形")
+        addToolButton(.arrow, symbol: "arrow.up.right", help: "箭头")
+        addToolButton(.pencil, symbol: "pencil.tip", help: "画笔")
+        stack.addArrangedSubview(separator())
+        stack.addArrangedSubview(button(symbol: "arrow.uturn.backward", help: "撤销", tag: 10))
+        stack.addArrangedSubview(button(symbol: "arrow.uturn.forward", help: "重做", tag: 11))
+        stack.addArrangedSubview(separator())
+        stack.addArrangedSubview(button(symbol: "doc.on.doc", help: "复制", tag: 20))
+        stack.addArrangedSubview(button(symbol: "square.and.arrow.down", help: "保存", tag: 21))
+        stack.addArrangedSubview(button(symbol: "pin", help: "贴到屏幕", tag: 22))
+        stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
+    }
+
+    private func addToolButton(_ tool: Tool, symbol: String, help: String) {
+        let control = button(symbol: symbol, help: help, tag: tool.rawValue)
+        control.setButtonType(.toggle)
+        toolButtons[tool] = control
+        stack.addArrangedSubview(control)
+    }
+
+    private func button(symbol: String, help: String, tag: Int) -> NSButton {
+        let control = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: help)!, target: self, action: #selector(toolbarAction(_:)))
+        control.isBordered = false
+        control.imagePosition = .imageOnly
+        control.toolTip = help
+        control.tag = tag
+        control.widthAnchor.constraint(equalToConstant: 30).isActive = true
+        control.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        return control
+    }
+
+    private func separator() -> NSBox {
+        let box = NSBox()
+        box.boxType = .separator
+        box.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        box.heightAnchor.constraint(equalToConstant: 20).isActive = true
+        return box
+    }
+
+    @objc private func toolbarAction(_ sender: NSButton) {
+        if let selectedTool = Tool(rawValue: sender.tag) {
+            tool = selectedTool
+            updateToolButtons()
+            return
+        }
+        switch sender.tag {
+        case 10: document.undo(); needsDisplay = true
+        case 11: document.redo(); needsDisplay = true
+        case 20: finish(.copy)
+        case 21: finish(.save)
+        case 22: finish(.pin)
+        case 99: onCancel()
+        default: break
+        }
+    }
+
+    private func updateToolButtons() {
+        for (candidate, button) in toolButtons {
+            button.state = candidate == tool ? .on : .off
+            button.contentTintColor = candidate == tool ? .systemCyan : .labelColor
+        }
+    }
+
+    private func layoutToolbar() {
+        guard !toolbar.isHidden else { return }
+        let desired = stack.fittingSize
+        let width = desired.width
+        let height = max(42, desired.height)
+        var x = min(selectionRect.maxX - width, bounds.maxX - width - 10)
+        x = max(10, x)
+        var y = selectionRect.minY - height - 10
+        if y < 10 { y = min(bounds.maxY - height - 10, selectionRect.maxY + 10) }
+        toolbar.frame = NSRect(x: x, y: y, width: width, height: height)
+        stack.frame = toolbar.bounds
+    }
+
+    private func annotation(from start: CGPoint, to end: CGPoint) -> Annotation {
+        switch tool {
+        case .rectangle:
+            return .rectangle(SelectionRect(start: start, end: end).rect, accent, 3)
+        case .arrow:
+            return .arrow(from: start, to: end, accent, 3)
+        case .pencil:
+            return .pencil(pencilPoints.isEmpty ? [start, end] : pencilPoints, accent, 3)
+        }
+    }
+
+    private func draw(_ annotation: Annotation) {
+        let color: RGBAColor
+        let width: CGFloat
+        switch annotation {
+        case let .rectangle(rect, value, lineWidth):
+            color = value; width = lineWidth
+            setStroke(color, width: width)
+            NSBezierPath(rect: rect).stroke()
+        case let .arrow(from, to, value, lineWidth):
+            color = value; width = lineWidth
+            setStroke(color, width: width)
+            let path = NSBezierPath()
+            path.move(to: from)
+            path.line(to: to)
+            path.stroke()
+            let angle = atan2(to.y - from.y, to.x - from.x)
+            let length = max(10, width * 4)
+            let spread = CGFloat.pi / 7
+            let head = NSBezierPath()
+            head.move(to: CGPoint(x: to.x - length * cos(angle - spread), y: to.y - length * sin(angle - spread)))
+            head.line(to: to)
+            head.line(to: CGPoint(x: to.x - length * cos(angle + spread), y: to.y - length * sin(angle + spread)))
+            head.stroke()
+        case let .pencil(points, value, lineWidth):
+            color = value; width = lineWidth
+            guard let first = points.first else { return }
+            setStroke(color, width: width)
+            let path = NSBezierPath()
+            path.move(to: first)
+            for point in points.dropFirst() { path.line(to: point) }
+            path.stroke()
+        }
+    }
+
+    private func setStroke(_ color: RGBAColor, width: CGFloat) {
+        NSColor(srgbRed: color.red, green: color.green, blue: color.blue, alpha: color.alpha).setStroke()
+        NSBezierPath.defaultLineWidth = width
+        NSBezierPath.defaultLineCapStyle = .round
+        NSBezierPath.defaultLineJoinStyle = .round
+    }
+
+    private func finish(_ action: CaptureResultAction) {
+        let scale = CGFloat(screenshot.width) / max(1, bounds.width)
+        let mapper = DisplayCoordinateMapper(viewHeight: bounds.height, pixelScale: scale)
+        let imageBounds = CGRect(x: 0, y: 0, width: screenshot.width, height: screenshot.height)
+        let cropRect = mapper.pixelRect(for: selectionRect).intersection(imageBounds)
+        guard !cropRect.isEmpty, let crop = screenshot.cropping(to: cropRect) else {
+            NSSound.beep()
+            return
+        }
+        let mapped = document.annotations.map {
+            $0.mapped(relativeTo: selectionRect.origin, scale: scale)
+        }
+        guard let result = AnnotationRenderer.render(baseImage: crop, annotations: mapped) else {
+            NSSound.beep()
+            return
+        }
+        onResult(result, action)
+    }
+
+    private func drawSizeLabel() {
+        let label = "\(Int(round(selectionRect.width))) × \(Int(round(selectionRect.height)))"
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .medium),
+            .foregroundColor: NSColor.white
+        ]
+        let size = label.size(withAttributes: attributes)
+        var origin = CGPoint(x: selectionRect.minX + 4, y: selectionRect.maxY + 7)
+        if origin.y + size.height + 8 > bounds.maxY {
+            origin.y = selectionRect.maxY - size.height - 8
+        }
+        let background = NSRect(x: origin.x - 4, y: origin.y - 3, width: size.width + 8, height: size.height + 6)
+        NSColor.black.withAlphaComponent(0.72).setFill()
+        NSBezierPath(roundedRect: background, xRadius: 5, yRadius: 5).fill()
+        label.draw(at: origin, withAttributes: attributes)
+    }
+
+    private func drawCrosshair(at point: CGPoint) {
+        NSColor.white.withAlphaComponent(0.72).setStroke()
+        let path = NSBezierPath()
+        path.lineWidth = 1
+        path.move(to: CGPoint(x: point.x - 10, y: point.y))
+        path.line(to: CGPoint(x: point.x + 10, y: point.y))
+        path.move(to: CGPoint(x: point.x, y: point.y - 10))
+        path.line(to: CGPoint(x: point.x, y: point.y + 10))
+        path.stroke()
+    }
+
+    private func bounded(_ point: CGPoint) -> CGPoint {
+        CGPoint(x: min(max(bounds.minX, point.x), bounds.maxX), y: min(max(bounds.minY, point.y), bounds.maxY))
+    }
+}
+
