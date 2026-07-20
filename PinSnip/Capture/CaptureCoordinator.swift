@@ -1,18 +1,30 @@
 import AppKit
+import PinSnipCore
 
 @MainActor
 final class CaptureCoordinator {
     private let captureService = ScreenCaptureService()
+    private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
     private var overlay: SelectionOverlayController?
     private var isCapturing = false
 
-    init(pinManager: PinWindowManager) {
+    init(
+        pinManager: PinWindowManager,
+        permissionGate: ScreenCapturePermissionGate = ScreenCapturePermissionGate(
+            provider: SystemScreenCapturePermissionProvider()
+        )
+    ) {
         self.pinManager = pinManager
+        self.permissionGate = permissionGate
     }
 
     func startCapture() {
         guard !isCapturing else { return }
+        guard permissionGate.ensureAuthorized() else {
+            presentScreenCapturePermissionRequired()
+            return
+        }
         guard let screen = screen(at: NSEvent.mouseLocation) else {
             NSSound.beep()
             return
@@ -72,9 +84,34 @@ final class CaptureCoordinator {
         alert.informativeText = "请在“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”中允许 PinSnip，然后重试。\n\n\(error.localizedDescription)"
         alert.addButton(withTitle: "打开系统设置")
         alert.addButton(withTitle: "稍后")
-        if alert.runModal() == .alertFirstButtonReturn,
-           let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
-            NSWorkspace.shared.open(url)
+        if runForeground(alert) == .alertFirstButtonReturn {
+            openScreenCaptureSettings()
         }
+    }
+
+    private func presentScreenCapturePermissionRequired() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "需要开启屏幕录制权限"
+        alert.informativeText = "macOS 需要你在系统设置中手动允许 PinSnip。开启后请退出并重新打开 PinSnip，再按 ⌃⇧1 截图。"
+        alert.addButton(withTitle: "打开系统设置")
+        alert.addButton(withTitle: "稍后")
+        if runForeground(alert) == .alertFirstButtonReturn {
+            openScreenCaptureSettings()
+        }
+    }
+
+    private func runForeground(_ alert: NSAlert) -> NSApplication.ModalResponse {
+        NSRunningApplication.current.activate(options: [.activateAllWindows])
+        alert.window.level = .floating
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        return alert.runModal()
+    }
+
+    private func openScreenCaptureSettings() {
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 }

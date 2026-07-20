@@ -1,4 +1,5 @@
 import AppKit
+import PinSnipCore
 
 @MainActor
 final class SelectionOverlayController: NSWindowController {
@@ -26,6 +27,7 @@ final class SelectionOverlayController: NSWindowController {
         panel.backgroundColor = .black
         panel.hasShadow = false
         panel.level = .screenSaver
+        panel.hidesOnDeactivate = CaptureOverlayPresentationPolicy.hidesOnDeactivate
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
         panel.isReleasedWhenClosed = false
         panel.acceptsMouseMovedEvents = true
@@ -36,8 +38,8 @@ final class SelectionOverlayController: NSWindowController {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func present() {
+        NSApp.activate()
         window?.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
         if let view = window?.contentView {
             window?.makeFirstResponder(view)
         }
@@ -48,4 +50,3 @@ private final class CapturePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 }
-

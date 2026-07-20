@@ -1,4 +1,5 @@
 import AppKit
+import PinSnipCore
 import ScreenCaptureKit
 
 enum ScreenCaptureError: LocalizedError {
@@ -9,6 +10,16 @@ enum ScreenCaptureError: LocalizedError {
         case .displayUnavailable:
             return "找不到可截取的显示器。"
         }
+    }
+}
+
+final class SystemScreenCapturePermissionProvider: ScreenCapturePermissionProviding {
+    var isAuthorized: Bool {
+        CGPreflightScreenCaptureAccess()
+    }
+
+    func requestAuthorization() -> Bool {
+        CGRequestScreenCaptureAccess()
     }
 }
 
@@ -33,4 +44,3 @@ final class ScreenCaptureService {
         )
     }
 }
-
