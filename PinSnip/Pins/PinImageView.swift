@@ -8,7 +8,7 @@ final class PinImageView: NSView {
         didSet { needsDisplay = true }
     }
     var onScroll: ((CGFloat, Bool) -> Void)?
-    var onKeyAction: ((Character) -> Void)?
+    var onKeyAction: ((Character, NSEvent.ModifierFlags) -> Void)?
 
     init(image: CGImage) {
         self.image = image
@@ -53,6 +53,7 @@ final class PinImageView: NSView {
             window?.orderOut(nil)
             return
         }
+        window?.makeKey()
         window?.makeFirstResponder(self)
         window?.performDrag(with: event)
     }
@@ -66,7 +67,6 @@ final class PinImageView: NSView {
             super.keyDown(with: event)
             return
         }
-        onKeyAction?(character)
+        onKeyAction?(character, event.modifierFlags)
     }
 }
-

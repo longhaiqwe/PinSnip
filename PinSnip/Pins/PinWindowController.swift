@@ -36,7 +36,9 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
         imageView.onScroll = { [weak self] delta, adjustsOpacity in
             self?.handleScroll(delta: delta, adjustsOpacity: adjustsOpacity)
         }
-        imageView.onKeyAction = { [weak self] key in self?.handleKey(key) }
+        imageView.onKeyAction = { [weak self] key, modifiers in
+            self?.handleKey(key, modifiers: modifiers)
+        }
         applyTransform(keepingCenter: false)
     }
 
@@ -115,14 +117,21 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
         applyTransform()
     }
 
-    private func handleKey(_ key: Character) {
+    private func handleKey(_ key: Character, modifiers: NSEvent.ModifierFlags) {
+        if PinKeyboardShortcut.shouldClose(
+            character: key,
+            commandPressed: modifiers.contains(.command)
+        ) {
+            closePin()
+            return
+        }
+
         switch key {
         case "1": rotateClockwise()
         case "2": rotateCounterclockwise()
         case "3": flipHorizontal()
         case "4": flipVertical()
         case "x", "X": toggleClickThrough()
-        case "w" where NSEvent.modifierFlags.contains(.command): closePin()
         default: break
         }
     }
@@ -176,4 +185,3 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
 private final class PinPanel: NSPanel {
     override var canBecomeKey: Bool { true }
 }
-
