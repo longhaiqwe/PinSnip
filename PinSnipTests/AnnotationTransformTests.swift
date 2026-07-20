@@ -34,4 +34,23 @@ final class AnnotationTransformTests: XCTestCase {
             .pencil([CGPoint(x: 4, y: 6), CGPoint(x: 6, y: 10)], .black, 8)
         )
     }
+
+    func testMapsSequenceNumberCenterAndDiameter() {
+        let number = Annotation.number(
+            center: CGPoint(x: 15, y: 22),
+            value: 3,
+            color: .black,
+            diameter: 28
+        )
+
+        XCTAssertEqual(
+            number.mapped(relativeTo: CGPoint(x: 5, y: 7), scale: 2),
+            .number(
+                center: CGPoint(x: 20, y: 30),
+                value: 3,
+                color: .black,
+                diameter: 56
+            )
+        )
+    }
 }

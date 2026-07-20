@@ -24,6 +24,35 @@ final class AnnotationRendererTests: XCTestCase {
         XCTAssertGreaterThan(center.blue, 245)
     }
 
+    func testSequenceNumberRendersColoredBadgeWithWhiteDigit() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 48, height: 48, gray: 1))
+        let annotation = Annotation.number(
+            center: CGPoint(x: 24, y: 24),
+            value: 8,
+            color: RGBAColor(red: 1, green: 0, blue: 0),
+            diameter: 24
+        )
+
+        let rendered = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [annotation])
+        )
+
+        let badge = try XCTUnwrap(pixel(in: rendered, x: 16, y: 24))
+        XCTAssertGreaterThan(badge.red, 220)
+        XCTAssertLessThan(badge.green, 80)
+        XCTAssertLessThan(badge.blue, 80)
+
+        let glyphPixels = try (18...30).flatMap { y in
+            try (18...30).map { x in
+                try XCTUnwrap(pixel(in: rendered, x: x, y: y))
+            }
+        }
+        XCTAssertTrue(
+            glyphPixels.contains { $0.red > 220 && $0.green > 220 && $0.blue > 220 },
+            "Expected a white sequence-number glyph inside the badge"
+        )
+    }
+
     private func makeSolidImage(width: Int, height: Int, gray: UInt8) -> CGImage? {
         guard let context = CGContext(
             data: nil,

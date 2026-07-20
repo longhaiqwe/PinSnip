@@ -45,4 +45,25 @@ final class AnnotationDocumentTests: XCTestCase {
         document.undo()
         XCTAssertEqual(document.annotations.count, 2)
     }
+
+    func testSequenceNumbersStartAtOneAndReuseAnUndoneTail() {
+        var document = AnnotationDocument()
+        XCTAssertEqual(document.nextSequenceNumber, 1)
+
+        document.append(
+            .number(
+                center: CGPoint(x: 10, y: 10),
+                value: document.nextSequenceNumber,
+                color: .black,
+                diameter: 28
+            )
+        )
+        XCTAssertEqual(document.nextSequenceNumber, 2)
+
+        document.undo()
+        XCTAssertEqual(document.nextSequenceNumber, 1)
+
+        document.redo()
+        XCTAssertEqual(document.nextSequenceNumber, 2)
+    }
 }

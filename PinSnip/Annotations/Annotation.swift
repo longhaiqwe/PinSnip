@@ -4,6 +4,7 @@ public enum Annotation: Equatable, Sendable {
     case rectangle(CGRect, RGBAColor, CGFloat)
     case arrow(from: CGPoint, to: CGPoint, RGBAColor, CGFloat)
     case pencil([CGPoint], RGBAColor, CGFloat)
+    case number(center: CGPoint, value: Int, color: RGBAColor, diameter: CGFloat)
 
     public func mapped(relativeTo origin: CGPoint, scale: CGFloat) -> Annotation {
         func point(_ value: CGPoint) -> CGPoint {
@@ -26,6 +27,13 @@ public enum Annotation: Equatable, Sendable {
             return .arrow(from: point(from), to: point(to), color, width * scale)
         case let .pencil(points, color, width):
             return .pencil(points.map(point), color, width * scale)
+        case let .number(center, value, color, diameter):
+            return .number(
+                center: point(center),
+                value: value,
+                color: color,
+                diameter: diameter * scale
+            )
         }
     }
 }

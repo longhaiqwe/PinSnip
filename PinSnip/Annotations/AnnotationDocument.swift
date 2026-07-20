@@ -13,6 +13,14 @@ public struct AnnotationDocument: Equatable, Sendable {
 
     public var canUndo: Bool { !undoStack.isEmpty }
     public var canRedo: Bool { !redoStack.isEmpty }
+    public var nextSequenceNumber: Int {
+        let greatestNumber = annotations.reduce(into: 0) { result, annotation in
+            if case let .number(_, value, _, _) = annotation {
+                result = max(result, value)
+            }
+        }
+        return greatestNumber + 1
+    }
 
     public mutating func append(_ annotation: Annotation) {
         checkpoint()

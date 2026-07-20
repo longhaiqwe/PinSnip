@@ -1,4 +1,6 @@
 import CoreGraphics
+import CoreText
+import Foundation
 
 public enum AnnotationRenderer {
     public static func render(baseImage: CGImage, annotations: [Annotation]) -> CGImage? {
@@ -63,16 +65,71 @@ public enum AnnotationRenderer {
             context.addLine(to: to)
             context.addLine(to: right)
             context.strokePath()
+
+        case let .number(center, value, color, diameter):
+            drawNumber(
+                value,
+                center: center,
+                color: color,
+                diameter: diameter,
+                in: context
+            )
         }
     }
 
-    private static func configure(_ context: CGContext, color: RGBAColor, width: CGFloat) {
-        context.setStrokeColor(
-            CGColor(
-                colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-                components: [color.red, color.green, color.blue, color.alpha]
-            )!
+    private static func drawNumber(
+        _ value: Int,
+        center: CGPoint,
+        color: RGBAColor,
+        diameter: CGFloat,
+        in context: CGContext
+    ) {
+        let diameter = max(16, diameter)
+        let badgeRect = CGRect(
+            x: center.x - diameter / 2,
+            y: center.y - diameter / 2,
+            width: diameter,
+            height: diameter
         )
+        context.setFillColor(cgColor(color))
+        context.fillEllipse(in: badgeRect)
+
+        let digits = String(value)
+        let fontScale: CGFloat = digits.count >= 3 ? 0.38 : digits.count == 2 ? 0.45 : 0.52
+        let fontSize = diameter * fontScale
+        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, fontSize, nil)
+            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String):
+                CGColor(gray: 1, alpha: 1)
+        ]
+        let line = CTLineCreateWithAttributedString(
+            NSAttributedString(string: digits, attributes: attributes)
+        )
+        var ascent: CGFloat = 0
+        var descent: CGFloat = 0
+        let width = CGFloat(CTLineGetTypographicBounds(line, &ascent, &descent, nil))
+
+        context.saveGState()
+        context.textMatrix = .identity
+        context.textPosition = CGPoint(
+            x: center.x - width / 2,
+            y: center.y - (ascent - descent) / 2
+        )
+        CTLineDraw(line, context)
+        context.restoreGState()
+    }
+
+    private static func configure(_ context: CGContext, color: RGBAColor, width: CGFloat) {
+        context.setStrokeColor(cgColor(color))
         context.setLineWidth(max(1, width))
+    }
+
+    private static func cgColor(_ color: RGBAColor) -> CGColor {
+        CGColor(
+            colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
+            components: [color.red, color.green, color.blue, color.alpha]
+        )!
     }
 }

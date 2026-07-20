@@ -10,7 +10,7 @@ enum CaptureResultAction {
 @MainActor
 final class SelectionOverlayView: NSView {
     private enum Phase { case selecting, editing }
-    private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3 }
+    private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3, number = 4 }
 
     private let screenshot: CGImage
     private let onResult: (CGImage, CaptureResultAction) -> Void
@@ -179,6 +179,7 @@ final class SelectionOverlayView: NSView {
         addToolButton(.rectangle, symbol: "rectangle", help: "矩形")
         addToolButton(.arrow, symbol: "arrow.up.right", help: "箭头")
         addToolButton(.pencil, symbol: "pencil.tip", help: "画笔")
+        addToolButton(.number, symbol: "number.circle", help: "序号")
         stack.addArrangedSubview(separator())
         stack.addArrangedSubview(button(symbol: "arrow.uturn.backward", help: "撤销", tag: 10))
         stack.addArrangedSubview(button(symbol: "arrow.uturn.forward", help: "重做", tag: 11))
@@ -260,6 +261,13 @@ final class SelectionOverlayView: NSView {
             return .arrow(from: start, to: end, accent, 3)
         case .pencil:
             return .pencil(pencilPoints.isEmpty ? [start, end] : pencilPoints, accent, 3)
+        case .number:
+            return .number(
+                center: numberCenter(for: end),
+                value: document.nextSequenceNumber,
+                color: accent,
+                diameter: 28
+            )
         }
     }
 
@@ -294,7 +302,47 @@ final class SelectionOverlayView: NSView {
             path.move(to: first)
             for point in points.dropFirst() { path.line(to: point) }
             path.stroke()
+        case let .number(center, value, color, diameter):
+            let badgeRect = NSRect(
+                x: center.x - diameter / 2,
+                y: center.y - diameter / 2,
+                width: diameter,
+                height: diameter
+            )
+            NSColor(
+                srgbRed: color.red,
+                green: color.green,
+                blue: color.blue,
+                alpha: color.alpha
+            ).setFill()
+            NSBezierPath(ovalIn: badgeRect).fill()
+
+            let digits = String(value)
+            let fontScale: CGFloat = digits.count >= 3 ? 0.38 : digits.count == 2 ? 0.45 : 0.52
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: diameter * fontScale, weight: .semibold),
+                .foregroundColor: NSColor.white
+            ]
+            let size = digits.size(withAttributes: attributes)
+            digits.draw(
+                at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2),
+                withAttributes: attributes
+            )
         }
+    }
+
+    private func numberCenter(for point: CGPoint) -> CGPoint {
+        let radius: CGFloat = 14
+        let x = selectionRect.width >= radius * 2
+            ? min(max(selectionRect.minX + radius, point.x), selectionRect.maxX - radius)
+            : selectionRect.midX
+        let y = selectionRect.height >= radius * 2
+            ? min(max(selectionRect.minY + radius, point.y), selectionRect.maxY - radius)
+            : selectionRect.midY
+        return CGPoint(
+            x: x,
+            y: y
+        )
     }
 
     private func setStroke(_ color: RGBAColor, width: CGFloat) {
@@ -355,4 +403,3 @@ final class SelectionOverlayView: NSView {
         CGPoint(x: min(max(bounds.minX, point.x), bounds.maxX), y: min(max(bounds.minY, point.y), bounds.maxY))
     }
 }
-
