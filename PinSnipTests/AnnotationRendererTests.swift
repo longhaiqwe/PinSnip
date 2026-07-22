@@ -3,6 +3,67 @@ import XCTest
 @testable import PinSnipCore
 
 final class AnnotationRendererTests: XCTestCase {
+    func testShareCardAddsOpaquePaddingAroundScreenshot() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        XCTAssertEqual(rendered.width, 128)
+        XCTAssertEqual(rendered.height, 108)
+        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertEqual(background.alpha, 255)
+    }
+
+    func testShareCardBackgroundFollowsScreenshotDominantColor() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertGreaterThan(Int(background.red), Int(background.blue) + 60)
+    }
+
+    func testShareCardBackgroundUsesSparseAccentFromLightScreenshot() throws {
+        let base = try XCTUnwrap(makeLightImageWithRedAccents(width: 200, height: 120))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertGreaterThan(Int(background.red), Int(background.blue) + 30)
+    }
+
+    func testShareCardBackgroundPreservesMutedBlueAccent() throws {
+        let base = try XCTUnwrap(makeLightImageWithMutedBlueAccents(width: 200, height: 120))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertGreaterThanOrEqual(Int(background.blue) - Int(background.red), 25)
+    }
+
+    func testShareCardShadowKeepsNearbyBackgroundLight() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, gray: 1))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let clearBackground = try XCTUnwrap(pixel(in: rendered, x: 64, y: 12))
+        let shadowBackground = try XCTUnwrap(pixel(in: rendered, x: 64, y: 20))
+        let clearBrightness = Int(clearBackground.red) + Int(clearBackground.green) + Int(clearBackground.blue)
+        let shadowBrightness = Int(shadowBackground.red) + Int(shadowBackground.green) + Int(shadowBackground.blue)
+        XCTAssertLessThan(abs(clearBrightness - shadowBrightness), 20)
+    }
+
+    func testShareCardKeepsScreenshotCenterColor() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 12, green: 130, blue: 220))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let center = try XCTUnwrap(pixel(in: rendered, x: 64, y: 54))
+        XCTAssertEqual(center.red, 12, accuracy: 2)
+        XCTAssertEqual(center.green, 130, accuracy: 2)
+        XCTAssertEqual(center.blue, 220, accuracy: 2)
+    }
+
     func testRectangleChangesBorderPixelsButLeavesCenterUntouched() throws {
         let base = try XCTUnwrap(makeSolidImage(width: 32, height: 32, gray: 1))
         let annotation = Annotation.rectangle(
@@ -54,6 +115,17 @@ final class AnnotationRendererTests: XCTestCase {
     }
 
     private func makeSolidImage(width: Int, height: Int, gray: UInt8) -> CGImage? {
+        let channel: UInt8 = gray == 0 ? 0 : 255
+        return makeSolidImage(width: width, height: height, red: channel, green: channel, blue: channel)
+    }
+
+    private func makeSolidImage(
+        width: Int,
+        height: Int,
+        red: UInt8,
+        green: UInt8,
+        blue: UInt8
+    ) -> CGImage? {
         guard let context = CGContext(
             data: nil,
             width: width,
@@ -63,12 +135,70 @@ final class AnnotationRendererTests: XCTestCase {
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         ) else { return nil }
-        context.setFillColor(CGColor(red: CGFloat(gray), green: CGFloat(gray), blue: CGFloat(gray), alpha: 1))
+        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        context.setFillColor(
+            CGColor(
+                colorSpace: colorSpace,
+                components: [
+                    CGFloat(red) / 255,
+                    CGFloat(green) / 255,
+                    CGFloat(blue) / 255,
+                    1
+                ]
+            )!
+        )
         context.fill(CGRect(x: 0, y: 0, width: width, height: height))
         return context.makeImage()
     }
 
-    private func pixel(in image: CGImage, x: Int, y: Int) -> (red: UInt8, green: UInt8, blue: UInt8)? {
+    private func makeLightImageWithRedAccents(width: Int, height: Int) -> CGImage? {
+        makeLightImageWithAccents(
+            width: width,
+            height: height,
+            color: CGColor(red: 0.92, green: 0.16, blue: 0.12, alpha: 1)
+        )
+    }
+
+    private func makeLightImageWithMutedBlueAccents(width: Int, height: Int) -> CGImage? {
+        makeLightImageWithAccents(
+            width: width,
+            height: height,
+            color: CGColor(red: 0.43, green: 0.50, blue: 0.58, alpha: 1)
+        )
+    }
+
+    private func makeLightImageWithAccents(
+        width: Int,
+        height: Int,
+        color: CGColor
+    ) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(gray: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        context.setFillColor(CGColor(gray: 0.82, alpha: 1))
+        for y in stride(from: 8, to: height, by: 16) {
+            context.fill(CGRect(x: 8, y: y, width: width - 16, height: 8))
+        }
+        context.setFillColor(color)
+        context.fill(CGRect(x: 18, y: 22, width: 5, height: 76))
+        context.fill(CGRect(x: 58, y: 82, width: 70, height: 5))
+        context.fill(CGRect(x: 146, y: 34, width: 34, height: 8))
+        return context.makeImage()
+    }
+
+    private func pixel(
+        in image: CGImage,
+        x: Int,
+        y: Int
+    ) -> (red: UInt8, green: UInt8, blue: UInt8, alpha: UInt8)? {
         var bytes = [UInt8](repeating: 0, count: 4)
         guard let context = CGContext(
             data: &bytes,
@@ -81,6 +211,6 @@ final class AnnotationRendererTests: XCTestCase {
         ) else { return nil }
         context.translateBy(x: CGFloat(-x), y: CGFloat(y - image.height + 1))
         context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
-        return (bytes[0], bytes[1], bytes[2])
+        return (bytes[0], bytes[1], bytes[2], bytes[3])
     }
 }

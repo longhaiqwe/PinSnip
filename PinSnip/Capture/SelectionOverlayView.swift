@@ -277,9 +277,9 @@ final class SelectionOverlayView: NSView {
         stack.addArrangedSubview(button(symbol: "arrow.uturn.backward", help: "撤销", tag: 10))
         stack.addArrangedSubview(button(symbol: "arrow.uturn.forward", help: "重做", tag: 11))
         stack.addArrangedSubview(separator())
-        stack.addArrangedSubview(button(symbol: "doc.on.doc", help: "复制", tag: 20))
-        stack.addArrangedSubview(button(symbol: "square.and.arrow.down", help: "保存", tag: 21))
-        stack.addArrangedSubview(button(symbol: "pin", help: "贴到屏幕", tag: 22))
+        stack.addArrangedSubview(button(symbol: "doc.on.doc", help: "复制分享图", tag: 20))
+        stack.addArrangedSubview(button(symbol: "square.and.arrow.down", help: "保存分享图", tag: 21))
+        stack.addArrangedSubview(button(symbol: "pin", help: "贴原图到屏幕", tag: 22))
         stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
     }
 

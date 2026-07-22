@@ -1,11 +1,16 @@
 import AppKit
+import PinSnipCore
 import UniformTypeIdentifiers
 
 @MainActor
 enum CaptureOutputService {
     static func copy(_ image: CGImage, to pasteboard: NSPasteboard = .general) {
-        let representation = NSBitmapImageRep(cgImage: image)
-        let nsImage = NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
+        let output = ShareCardRenderer.render(baseImage: image) ?? image
+        let representation = NSBitmapImageRep(cgImage: output)
+        let nsImage = NSImage(
+            cgImage: output,
+            size: NSSize(width: output.width, height: output.height)
+        )
         pasteboard.clearContents()
         if let png = representation.representation(using: .png, properties: [:]) {
             pasteboard.setData(png, forType: .png)
@@ -24,7 +29,8 @@ enum CaptureOutputService {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
-        let representation = NSBitmapImageRep(cgImage: image)
+        let output = ShareCardRenderer.render(baseImage: image) ?? image
+        let representation = NSBitmapImageRep(cgImage: output)
         guard let data = representation.representation(using: .png, properties: [:]) else {
             NSSound.beep()
             return false
@@ -47,4 +53,3 @@ enum CaptureOutputService {
         return "PinSnip \(formatter.string(from: Date())).png"
     }
 }
-
