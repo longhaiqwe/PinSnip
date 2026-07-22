@@ -41,7 +41,9 @@ final class SelectionOverlayView: NSView {
     private let onCancel: () -> Void
     private var phase = Phase.selecting
     private var selectionState: WindowSelectionState
-    private var selectionRect: CGRect { selectionState.rect }
+    private var editingSelectionRect: CGRect?
+    private var activeResize: (handle: SelectionResizeHandle, initialRect: CGRect)?
+    private var selectionRect: CGRect { editingSelectionRect ?? selectionState.rect }
     private var tool = Tool.rectangle
     private var annotationStart: CGPoint?
     private var currentAnnotation: Annotation?
@@ -78,6 +80,7 @@ final class SelectionOverlayView: NSView {
         self.selectionState = selectionState
         super.init(frame: frameRect)
         phase = initialSelectionRect.isEmpty ? .selecting : .editing
+        editingSelectionRect = initialSelectionRect.isEmpty ? nil : initialSelectionRect
         wantsLayer = true
         configureToolbar()
         configureSelectionOptionsBar()
@@ -126,6 +129,18 @@ final class SelectionOverlayView: NSView {
             draw(currentAnnotation)
         }
         drawSizeLabel()
+        if phase == .editing {
+            for handle in SelectionResizeHandle.allCases {
+                let center = SelectionAdjustment.center(of: handle, in: selectionRect)
+                let handleRect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
+                NSColor.white.setFill()
+                NSColor.systemCyan.setStroke()
+                let path = NSBezierPath(rect: handleRect)
+                path.lineWidth = 1
+                path.fill()
+                path.stroke()
+            }
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
@@ -135,6 +150,17 @@ final class SelectionOverlayView: NSView {
             selectionState.begin(at: point)
             toolbar.isHidden = true
         case .editing:
+            if let handle = SelectionAdjustment.handle(
+                at: point,
+                in: selectionRect,
+                hitRadius: 8
+            ) {
+                activeResize = (handle, selectionRect)
+                annotationStart = nil
+                currentAnnotation = nil
+                pencilPoints.removeAll()
+                return
+            }
             guard selectionRect.contains(point) else { return }
             annotationStart = point
             pencilPoints = [point]
@@ -153,6 +179,18 @@ final class SelectionOverlayView: NSView {
                 constraint: aspectRatioOption.constraint
             )
         case .editing:
+            if let activeResize {
+                editingSelectionRect = SelectionAdjustment.resize(
+                    activeResize.initialRect,
+                    using: activeResize.handle,
+                    to: point,
+                    inside: bounds,
+                    minimumDimension: 3
+                )
+                needsLayout = true
+                needsDisplay = true
+                return
+            }
             guard let start = annotationStart else { return }
             if tool == .pencil {
                 pencilPoints.append(point)
@@ -170,11 +208,18 @@ final class SelectionOverlayView: NSView {
                 return
             }
             phase = .editing
+            editingSelectionRect = selectionState.rect
             toolbar.isHidden = false
             selectionOptionsBar.isHidden = true
             updateToolButtons()
             needsLayout = true
         case .editing:
+            if activeResize != nil {
+                activeResize = nil
+                needsLayout = true
+                needsDisplay = true
+                return
+            }
             if let currentAnnotation {
                 document.append(currentAnnotation)
             }

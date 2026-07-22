@@ -48,7 +48,9 @@
 		8ABE3D066EF7EE37A5D91933 /* WindowSelectionStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48DC45614E87C7D1237CAE96 /* WindowSelectionStateTests.swift */; };
 		8ACFCCAD8B23C7D5E4409DCD /* PinSnipApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EC13D1DC73FF652B0AB058F /* PinSnipApp.swift */; };
 		913AB3DE332B5C42678EFD81 /* DisplayCoordinateMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */; };
+		91D4803301554F0F67419F90 /* SelectionAdjustmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2F9D21497F2BC78EF7985A /* SelectionAdjustmentTests.swift */; };
 		9253CD643FB23E25EC693B27 /* PinSnipCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; };
+		9B70ECFDE88451835CF8B9CC /* SelectionAdjustment.swift in Sources */ = {isa = PBXBuildFile; fileRef = A421984ADE72845E721FAEA3 /* SelectionAdjustment.swift */; };
 		9E32AC4459A625C3C3450646 /* PinWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4EAF04D2631B7A055439BF2 /* PinWindowController.swift */; };
 		A2D6E9B07074490C7B042C5E /* PinSnipCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; };
 		AB8798D28FB7DC327A49AF0F /* AnnotationDocumentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4545ECE8D3CD0A997664F07 /* AnnotationDocumentTests.swift */; };
@@ -139,8 +141,10 @@
 		9BE7FF92AF2AB02E37A4DB6B /* AnnotationTransformTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationTransformTests.swift; sourceTree = "<group>"; };
 		9D57DD6717549BFB2C1C46CD /* ClipboardReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardReader.swift; sourceTree = "<group>"; };
 		A2A436E80ACF3A15D08DDB93 /* ClipboardCardRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardCardRenderer.swift; sourceTree = "<group>"; };
+		A421984ADE72845E721FAEA3 /* SelectionAdjustment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAdjustment.swift; sourceTree = "<group>"; };
 		A82F8D2B506D87B44973CF59 /* PinImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinImageView.swift; sourceTree = "<group>"; };
 		AADA4DC85CCED1ECF8B949A7 /* AppCommandTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCommandTests.swift; sourceTree = "<group>"; };
+		AB2F9D21497F2BC78EF7985A /* SelectionAdjustmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionAdjustmentTests.swift; sourceTree = "<group>"; };
 		AC8C822A92EACB2D6CFEA5D1 /* SelectionOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionOverlayView.swift; sourceTree = "<group>"; };
 		B1B1F58D7FAE9449D729C7DA /* AnnotationRendererTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRendererTests.swift; sourceTree = "<group>"; };
 		B2919F00332C849F7FD55986 /* CaptureCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureCoordinator.swift; sourceTree = "<group>"; };
@@ -251,6 +255,7 @@
 				B4B5CFA25A3D755595148B76 /* PinKeyboardShortcutTests.swift */,
 				FDC7F620CAAEBFE06F43FBA7 /* PinTransformTests.swift */,
 				26230B9AA5C567A5EDBF6E66 /* ScreenCapturePermissionGateTests.swift */,
+				AB2F9D21497F2BC78EF7985A /* SelectionAdjustmentTests.swift */,
 				8FB938AF42D9B0DCB63CEB21 /* SelectionConstraintTests.swift */,
 				1A391BF880E95279E6A8BA83 /* SelectionRectTests.swift */,
 				E0CCE86E93F8A3E371ACF04B /* WindowCandidateTests.swift */,
@@ -331,6 +336,7 @@
 				778BA8D913F725B856236B1B /* PinTransform.swift */,
 				28F0B6FA3638D99B59287648 /* RGBAColor.swift */,
 				0CFCA0B83F7A2E490CD6850A /* ScreenCapturePermissionGate.swift */,
+				A421984ADE72845E721FAEA3 /* SelectionAdjustment.swift */,
 				D897BD181575A92FBE52C75A /* SelectionConstraint.swift */,
 				88665745B20E2C62600A327A /* SelectionRect.swift */,
 				622E4D09F53DCA747F268711 /* WindowCandidate.swift */,
@@ -478,6 +484,7 @@
 				FFB9D686CE905A94ADD319CB /* PinTransform.swift in Sources */,
 				0A97E998742B0E4E2F75C26C /* RGBAColor.swift in Sources */,
 				71AE6462D47BED4C5DF427D6 /* ScreenCapturePermissionGate.swift in Sources */,
+				9B70ECFDE88451835CF8B9CC /* SelectionAdjustment.swift in Sources */,
 				23174AF429A24C59FCD0E65D /* SelectionConstraint.swift in Sources */,
 				18F9A371C68380FFC6B6BAC4 /* SelectionRect.swift in Sources */,
 				698779BFFEBC7B98C8A90988 /* WindowCandidate.swift in Sources */,
@@ -503,6 +510,7 @@
 				541B9CAFBE0E3497D431C816 /* PinKeyboardShortcutTests.swift in Sources */,
 				2FBCB16FC9CEE7A58089DCF0 /* PinTransformTests.swift in Sources */,
 				06F0774798776FE2119ABF05 /* ScreenCapturePermissionGateTests.swift in Sources */,
+				91D4803301554F0F67419F90 /* SelectionAdjustmentTests.swift in Sources */,
 				2FEA293DF1FDC0AD958A5EDF /* SelectionConstraintTests.swift in Sources */,
 				217E08A2FF2347C3F1578985 /* SelectionRectTests.swift in Sources */,
 				4A2F915572CBC3F515E8FB01 /* WindowCandidateTests.swift in Sources */,
