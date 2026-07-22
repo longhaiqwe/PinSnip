@@ -5,6 +5,7 @@ import PinSnipCore
 final class GIFRecordingPanelController: NSWindowController {
     private let statusLabel: NSTextField
     private let stopButton: NSButton
+    private let borderController: GIFRecordingBorderController
     private let startedAt = Date()
     private var timer: Timer?
     private var stopRequested = false
@@ -18,6 +19,10 @@ final class GIFRecordingPanelController: NSWindowController {
         stopButton.bezelStyle = .rounded
         self.statusLabel = statusLabel
         self.stopButton = stopButton
+        borderController = GIFRecordingBorderController(
+            screen: screen,
+            selectionRect: selectionRect
+        )
 
         let horizontalPadding: CGFloat = 12
         let spacing: CGFloat = 14
@@ -67,6 +72,7 @@ final class GIFRecordingPanelController: NSWindowController {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func present() {
+        borderController.present()
         showWindow(nil)
         window?.orderFrontRegardless()
         let timer = Timer(
@@ -81,6 +87,7 @@ final class GIFRecordingPanelController: NSWindowController {
     }
 
     func showExporting() {
+        borderController.dismiss()
         timer?.invalidate()
         timer = nil
         statusLabel.stringValue = "正在生成 GIF…"
@@ -89,6 +96,7 @@ final class GIFRecordingPanelController: NSWindowController {
     }
 
     func finish() {
+        borderController.dismiss()
         timer?.invalidate()
         timer = nil
         close()

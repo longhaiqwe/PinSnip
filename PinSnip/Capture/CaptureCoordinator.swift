@@ -3,12 +3,16 @@ import PinSnipCore
 
 @MainActor
 final class CaptureCoordinator {
+    private static let capturePreparationTimeout: Duration = .seconds(5)
+
     private let captureService = ScreenCaptureService()
     private let windowDetector = WindowDetector()
     private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
     private var overlay: SelectionOverlayController?
-    private var isCapturing = false
+    private var captureSessionState = CaptureSessionState()
+    private var captureTask: Task<Void, Never>?
+    private var captureTimeoutTask: Task<Void, Never>?
     private var isPreparingGIFRecording = false
     private var lastCaptureRegion: LastCaptureRegion?
     private var gifRecorder: ScreenGIFRecorder?
@@ -44,29 +48,52 @@ final class CaptureCoordinator {
         restoring region: LastCaptureRegion?,
         purpose: CaptureOverlayPurpose
     ) {
-        guard !isCapturing, !isPreparingGIFRecording, gifRecorder == nil else { return }
+        guard !isPreparingGIFRecording, gifRecorder == nil,
+              let sessionID = captureSessionState.begin()
+        else { return }
         guard permissionGate.ensureAuthorized() else {
+            captureSessionState.end(sessionID)
             presentScreenCapturePermissionRequired()
             return
         }
         guard let screen = screen(at: NSEvent.mouseLocation) else {
+            captureSessionState.end(sessionID)
             NSSound.beep()
             return
         }
-        isCapturing = true
-        Task {
+        let captureService = captureService
+        captureTask = Task { [weak self] in
             do {
                 let image = try await captureService.capture(screen)
-                presentOverlay(
+                guard let self, self.captureSessionState.isCurrent(sessionID) else { return }
+                self.captureTimeoutTask?.cancel()
+                self.captureTimeoutTask = nil
+                self.captureTask = nil
+                self.presentOverlay(
                     screen: screen,
                     screenshot: image,
                     restoring: region,
                     purpose: purpose
                 )
             } catch {
-                isCapturing = false
-                presentCaptureError(error)
+                guard let self, self.captureSessionState.end(sessionID) else { return }
+                self.captureTimeoutTask?.cancel()
+                self.captureTimeoutTask = nil
+                self.captureTask = nil
+                self.presentCaptureError(error)
             }
+        }
+        captureTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: Self.capturePreparationTimeout)
+            } catch {
+                return
+            }
+            guard let self, self.captureSessionState.end(sessionID) else { return }
+            self.captureTask?.cancel()
+            self.captureTask = nil
+            self.captureTimeoutTask = nil
+            self.presentCaptureTimeout()
         }
     }
 
@@ -184,9 +211,13 @@ final class CaptureCoordinator {
     }
 
     private func dismissOverlay() {
+        captureTask?.cancel()
+        captureTask = nil
+        captureTimeoutTask?.cancel()
+        captureTimeoutTask = nil
+        captureSessionState.endCurrent()
         overlay?.close()
         overlay = nil
-        isCapturing = false
     }
 
     private func screen(at point: NSPoint) -> NSScreen? {
@@ -203,6 +234,15 @@ final class CaptureCoordinator {
         if runForeground(alert) == .alertFirstButtonReturn {
             openScreenCaptureSettings()
         }
+    }
+
+    private func presentCaptureTimeout() {
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "PinSnip 读取屏幕超时"
+        alert.informativeText = "macOS 的屏幕捕获服务没有响应。现在可以再按一次 F1 或 F3 重试。"
+        alert.addButton(withTitle: "好")
+        _ = runForeground(alert)
     }
 
     private func presentScreenCapturePermissionRequired() {

@@ -20,6 +20,8 @@ targets:
       - PinSnip/Hotkeys
       - PinSnip/Output
       - PinSnip/Pins
+      - path: PinSnip/Resources/PinSnip.icns
+        buildPhase: resources
     dependencies:
       - target: PinSnipCore
         embed: true

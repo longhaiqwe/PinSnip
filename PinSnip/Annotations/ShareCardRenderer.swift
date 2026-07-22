@@ -9,30 +9,71 @@ public enum ShareCardRenderer {
         let blue: CGFloat
     }
 
+    public struct Template {
+        private let background: CGImage
+        private let contentRect: CGRect
+        private let cornerRadius: CGFloat
+
+        public init?(styleSource: CGImage) {
+            let padding = ShareCardRenderer.canvasPadding(for: styleSource)
+            let canvasWidth = styleSource.width + padding * 2
+            let canvasHeight = styleSource.height + padding * 2
+            guard let context = ShareCardRenderer.makeContext(
+                width: canvasWidth,
+                height: canvasHeight
+            ) else { return nil }
+
+            let canvas = CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight)
+            let contentRect = canvas.insetBy(dx: CGFloat(padding), dy: CGFloat(padding))
+            let cornerRadius = ShareCardRenderer.cornerRadius(for: contentRect)
+            ShareCardRenderer.drawBackground(
+                styleSource,
+                in: canvas,
+                padding: CGFloat(padding),
+                context: context
+            )
+            ShareCardRenderer.drawCardShadow(
+                in: contentRect,
+                cornerRadius: cornerRadius,
+                context: context
+            )
+            guard let background = context.makeImage() else { return nil }
+            self.background = background
+            self.contentRect = contentRect
+            self.cornerRadius = cornerRadius
+        }
+
+        public func render(baseImage: CGImage) -> CGImage? {
+            guard let context = ShareCardRenderer.makeContext(
+                width: background.width,
+                height: background.height
+            ) else { return nil }
+            let canvas = CGRect(x: 0, y: 0, width: background.width, height: background.height)
+            context.draw(background, in: canvas)
+            ShareCardRenderer.drawScreenshotContent(
+                baseImage,
+                in: contentRect,
+                cornerRadius: cornerRadius,
+                context: context
+            )
+            return context.makeImage()
+        }
+    }
+
     public static func render(baseImage: CGImage) -> CGImage? {
-        let padding = canvasPadding(for: baseImage)
-        let canvasWidth = baseImage.width + padding * 2
-        let canvasHeight = baseImage.height + padding * 2
-        let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
+        Template(styleSource: baseImage)?.render(baseImage: baseImage)
+    }
 
-        guard let context = CGContext(
+    private static func makeContext(width: Int, height: Int) -> CGContext? {
+        CGContext(
             data: nil,
-            width: canvasWidth,
-            height: canvasHeight,
+            width: width,
+            height: height,
             bitsPerComponent: 8,
-            bytesPerRow: canvasWidth * 4,
-            space: colorSpace,
+            bytesPerRow: width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else { return nil }
-
-        let canvas = CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight)
-        drawBackground(baseImage, in: canvas, padding: CGFloat(padding), context: context)
-        drawScreenshot(
-            baseImage,
-            in: canvas.insetBy(dx: CGFloat(padding), dy: CGFloat(padding)),
-            context: context
         )
-        return context.makeImage()
     }
 
     private static func canvasPadding(for image: CGImage) -> Int {
@@ -184,29 +225,46 @@ public enum ShareCardRenderer {
         return CIContext(options: [.cacheIntermediates: false]).createCGImage(input, from: canvas)
     }
 
-    private static func drawScreenshot(
-        _ image: CGImage,
+    private static func cornerRadius(for rect: CGRect) -> CGFloat {
+        min(32, max(12, min(rect.width, rect.height) * 0.025))
+    }
+
+    private static func drawCardShadow(
         in rect: CGRect,
+        cornerRadius: CGFloat,
         context: CGContext
     ) {
-        let radius = min(32, max(12, min(rect.width, rect.height) * 0.025))
         let cardPath = CGPath(
             roundedRect: rect,
-            cornerWidth: radius,
-            cornerHeight: radius,
+            cornerWidth: cornerRadius,
+            cornerHeight: cornerRadius,
             transform: nil
         )
 
         context.saveGState()
         context.setShadow(
-            offset: CGSize(width: 0, height: -max(2, radius * 0.15)),
-            blur: max(18, radius * 1.5),
+            offset: CGSize(width: 0, height: -max(2, cornerRadius * 0.15)),
+            blur: max(18, cornerRadius * 1.5),
             color: CGColor(gray: 0, alpha: 0.16)
         )
         context.addPath(cardPath)
         context.setFillColor(CGColor(gray: 1, alpha: 1))
         context.fillPath()
         context.restoreGState()
+    }
+
+    private static func drawScreenshotContent(
+        _ image: CGImage,
+        in rect: CGRect,
+        cornerRadius: CGFloat,
+        context: CGContext
+    ) {
+        let cardPath = CGPath(
+            roundedRect: rect,
+            cornerWidth: cornerRadius,
+            cornerHeight: cornerRadius,
+            transform: nil
+        )
 
         context.saveGState()
         context.addPath(cardPath)

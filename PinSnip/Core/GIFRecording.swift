@@ -53,6 +53,37 @@ public enum AnimatedGIFEncoder {
         encode(frameCount: frames.count, loopCount: loopCount) { frames[$0] }
     }
 
+    public static func encodeShareCard(
+        frames: [AnimatedImage.Frame],
+        loopCount: Int = 0
+    ) -> Data? {
+        encodeShareCard(frameCount: frames.count, loopCount: loopCount) { frames[$0] }
+    }
+
+    public static func encodeShareCard(
+        frameCount: Int,
+        loopCount: Int = 0,
+        frameProvider: (Int) -> AnimatedImage.Frame?
+    ) -> Data? {
+        guard frameCount > 1,
+              let firstFrame = frameProvider(0),
+              let template = ShareCardRenderer.Template(styleSource: firstFrame.image)
+        else { return nil }
+
+        return encode(frameCount: frameCount, loopCount: loopCount) { index in
+            let frame: AnimatedImage.Frame?
+            if index == 0 {
+                frame = firstFrame
+            } else {
+                frame = frameProvider(index)
+            }
+            guard let frame,
+                  let image = template.render(baseImage: frame.image)
+            else { return nil }
+            return AnimatedImage.Frame(image: image, duration: frame.duration)
+        }
+    }
+
     public static func encode(
         frameCount: Int,
         loopCount: Int = 0,

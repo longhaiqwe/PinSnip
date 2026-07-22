@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="background" x1="112" y1="80" x2="900" y2="952" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101827"/>
+      <stop offset="0.48" stop-color="#1E2A78"/>
+      <stop offset="1" stop-color="#4438A8"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(740 226) rotate(132) scale(660)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#22D3EE" stop-opacity="0.34"/>
+      <stop offset="0.58" stop-color="#4F46E5" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#111827" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="screen" x1="330" y1="376" x2="714" y2="594" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#27347C"/>
+    </linearGradient>
+    <linearGradient id="landscape" x1="330" y1="500" x2="690" y2="580" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2DD4BF"/>
+      <stop offset="1" stop-color="#60A5FA"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="700" y1="247" x2="804" y2="367" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF746A"/>
+      <stop offset="1" stop-color="#F04452"/>
+    </linearGradient>
+    <filter id="cardShadow" x="120" y="130" width="790" height="700" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="34" stdDeviation="34" flood-color="#050816" flood-opacity="0.34"/>
+    </filter>
+    <filter id="pinShadow" x="642" y="208" width="226" height="230" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="16" stdDeviation="14" flood-color="#0A0B2D" flood-opacity="0.36"/>
+    </filter>
+    <clipPath id="squircle">
+      <path d="M512 32C268 32 159 32 95 95S32 268 32 512s0 353 63 417 173 63 417 63 353 0 417-63 63-173 63-417 0-353-63-417S756 32 512 32Z"/>
+    </clipPath>
+  </defs>
+
+  <g clip-path="url(#squircle)">
+    <rect width="1024" height="1024" fill="url(#background)"/>
+    <rect width="1024" height="1024" fill="url(#glow)"/>
+    <path d="M-58 862C178 718 342 760 522 858c170 92 337 94 560-30v226H-58V862Z" fill="#111233" fill-opacity="0.24"/>
+
+    <g filter="url(#cardShadow)">
+      <rect x="206" y="244" width="566" height="426" rx="82" transform="rotate(-5 206 244)" fill="#D9E3FF" fill-opacity="0.22" stroke="#FFFFFF" stroke-opacity="0.18" stroke-width="4"/>
+      <rect x="226" y="298" width="572" height="430" rx="82" fill="#F8FAFC"/>
+      <rect x="278" y="352" width="468" height="250" rx="42" fill="url(#screen)"/>
+
+      <circle cx="648" cy="426" r="28" fill="#FDE68A"/>
+      <path d="M278 548 378 457l76 72 73-61 121 134H320c-23 0-42-19-42-42v-12Z" fill="url(#landscape)"/>
+      <path d="M278 563 382 486l73 64 74-45 117 97H320c-23 0-42-17-42-39Z" fill="#38BDF8" fill-opacity="0.36"/>
+
+      <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round" stroke-width="19">
+        <path d="M326 442v-36c0-8 6-14 14-14h38"/>
+        <path d="M646 392h38c8 0 14 6 14 14v36"/>
+        <path d="M326 512v32c0 8 6 14 14 14h38"/>
+        <path d="M646 558h38c8 0 14-6 14-14v-32"/>
+      </g>
+
+      <rect x="290" y="642" width="196" height="20" rx="10" fill="#CBD5E1"/>
+      <rect x="506" y="642" width="108" height="20" rx="10" fill="#E2E8F0"/>
+    </g>
+
+    <g filter="url(#pinShadow)" transform="translate(132 55) scale(0.85)">
+      <circle cx="747" cy="301" r="79" fill="url(#pin)"/>
+      <path d="M747 260c-20 0-35 15-35 34 0 14 8 26 20 31v33l15 22 15-22v-33c12-5 20-17 20-31 0-19-15-34-35-34Z" fill="#FFFFFF"/>
+      <circle cx="747" cy="294" r="14" fill="#F65D60"/>
+    </g>
+
+    <path d="M114 205C194 90 332 56 477 62" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-linecap="round" stroke-width="18"/>
+  </g>
+</svg>
