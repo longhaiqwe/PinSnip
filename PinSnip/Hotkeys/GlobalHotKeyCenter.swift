@@ -6,7 +6,8 @@ import PinSnipCore
 final class GlobalHotKeyCenter {
     enum Identifier: UInt32 {
         case capture = 1
-        case paste = 2
+        case recording = 2
+        case paste = 3
     }
 
     private let handler: (Identifier) -> Void
@@ -54,8 +55,9 @@ final class GlobalHotKeyCenter {
 
     private func registerAll(_ settings: HotKeySettings) -> Bool {
         let capture = register(.capture, shortcut: settings.capture)
+        let recording = register(.recording, shortcut: settings.recording)
         let paste = register(.paste, shortcut: settings.paste)
-        return capture && paste
+        return capture && recording && paste
     }
 
     private func unregisterHotKeys() {

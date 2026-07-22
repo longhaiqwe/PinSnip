@@ -1,16 +1,33 @@
 import AppKit
+import PinSnipCore
 
 @MainActor
 final class GIFRecordingPanelController: NSWindowController {
-    private let statusLabel = NSTextField(labelWithString: "● 录制中 00:00 / 00:30")
-    private let stopButton = NSButton(title: "停止并生成 GIF", target: nil, action: nil)
+    private let statusLabel: NSTextField
+    private let stopButton: NSButton
     private let startedAt = Date()
     private var timer: Timer?
     private var stopRequested = false
     var onStop: (() -> Void)?
 
     init(screen: NSScreen, selectionRect: CGRect) {
-        let size = NSSize(width: 270, height: 48)
+        let statusLabel = NSTextField(labelWithString: "● 录制中 00:00 / 00:30")
+        statusLabel.textColor = .systemRed
+        statusLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
+        let stopButton = NSButton(title: "停止并生成 GIF", target: nil, action: nil)
+        stopButton.bezelStyle = .rounded
+        self.statusLabel = statusLabel
+        self.stopButton = stopButton
+
+        let horizontalPadding: CGFloat = 12
+        let spacing: CGFloat = 14
+        let width = GIFRecordingPanelLayout.minimumContentWidth(
+            statusWidth: statusLabel.intrinsicContentSize.width,
+            stopButtonWidth: stopButton.intrinsicContentSize.width,
+            spacing: spacing,
+            horizontalPadding: horizontalPadding
+        )
+        let size = NSSize(width: width, height: 48)
         let globalSelection = selectionRect.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY)
         var origin = NSPoint(
             x: min(max(screen.visibleFrame.minX, globalSelection.minX), screen.visibleFrame.maxX - size.width),
@@ -33,17 +50,14 @@ final class GIFRecordingPanelController: NSWindowController {
         super.init(window: panel)
 
         let content = NSView(frame: NSRect(origin: .zero, size: size))
-        statusLabel.textColor = .systemRed
-        statusLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
         stopButton.target = self
         stopButton.action = #selector(requestStop)
-        stopButton.bezelStyle = .rounded
         let stack = NSStackView(views: [statusLabel, stopButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.distribution = .fill
-        stack.spacing = 14
-        stack.frame = content.bounds.insetBy(dx: 12, dy: 8)
+        stack.spacing = spacing
+        stack.frame = content.bounds.insetBy(dx: horizontalPadding, dy: 8)
         stack.autoresizingMask = [.width, .height]
         content.addSubview(stack)
         panel.contentView = content

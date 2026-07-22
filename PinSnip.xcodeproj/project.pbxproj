@@ -45,6 +45,7 @@
 		74ED14A8AAF365F8FDFBB787 /* AnnotationDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81E25A6B0787938CF9426446 /* AnnotationDocument.swift */; };
 		787401C97DF8BF6574DAA11B /* DisplayCoordinateMapperTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */; };
 		7D919906976DD27307F12E9B /* AppCommandTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AADA4DC85CCED1ECF8B949A7 /* AppCommandTests.swift */; };
+		7D9F58ADC83F8705BE0FDB65 /* GIFRecordingPanelLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2811FEEDB765179FFFDA9584 /* GIFRecordingPanelLayout.swift */; };
 		8084712F1CFECA06F0101676 /* PinKeyboardShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B5C70C5BC478E8A45BAF772 /* PinKeyboardShortcut.swift */; };
 		837861D79583218CCF5CB1AF /* HotKeyShortcut+AppKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11190C9BE08E9379F1737AC /* HotKeyShortcut+AppKit.swift */; };
 		8571EB5D83C3A27931B5DAD3 /* WindowFrameMapper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B94C0F14BF68B791A81049 /* WindowFrameMapper.swift */; };
@@ -75,6 +76,7 @@
 		F6C0B53DFB082B26B76D2EBB /* ClipboardPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100B38E7DB377D3BC50BEDD /* ClipboardPayloadTests.swift */; };
 		F8FECA1B0B1F230DCC59EF55 /* PinSnipCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		FE6E904CE16E29D2F100202A /* AnimationPlaybackState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A6F111E13FCA96AEF4FE2D /* AnimationPlaybackState.swift */; };
+		FE777BD06082F48D6762B78E /* GIFRecordingPanelLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C5659F84EF659062F4ACE6 /* GIFRecordingPanelLayoutTests.swift */; };
 		FFB9D686CE905A94ADD319CB /* PinTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778BA8D913F725B856236B1B /* PinTransform.swift */; };
 /* End PBXBuildFile section */
 
@@ -131,6 +133,7 @@
 		1EC13D1DC73FF652B0AB058F /* PinSnipApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinSnipApp.swift; sourceTree = "<group>"; };
 		26230B9AA5C567A5EDBF6E66 /* ScreenCapturePermissionGateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenCapturePermissionGateTests.swift; sourceTree = "<group>"; };
 		26D134EB89F2E525FA96A4CD /* GIFRecordingPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecordingPanelController.swift; sourceTree = "<group>"; };
+		2811FEEDB765179FFFDA9584 /* GIFRecordingPanelLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecordingPanelLayout.swift; sourceTree = "<group>"; };
 		28F0B6FA3638D99B59287648 /* RGBAColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RGBAColor.swift; sourceTree = "<group>"; };
 		2B5C70C5BC478E8A45BAF772 /* PinKeyboardShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinKeyboardShortcut.swift; sourceTree = "<group>"; };
 		2CDAF545D1E31DD4D2EB6290 /* AnimatedImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedImageTests.swift; sourceTree = "<group>"; };
@@ -138,6 +141,7 @@
 		3B4D1D5409543C375B7775EE /* LastCaptureRegionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastCaptureRegionTests.swift; sourceTree = "<group>"; };
 		401BA4B3B3D0C205727AC2B1 /* GlobalHotKeyCenter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalHotKeyCenter.swift; sourceTree = "<group>"; };
 		4424594A26365B99274FE812 /* GIFRecording.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecording.swift; sourceTree = "<group>"; };
+		48C5659F84EF659062F4ACE6 /* GIFRecordingPanelLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecordingPanelLayoutTests.swift; sourceTree = "<group>"; };
 		48DC45614E87C7D1237CAE96 /* WindowSelectionStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowSelectionStateTests.swift; sourceTree = "<group>"; };
 		491A1CAF46A991C82BD517A1 /* AnnotationRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationRenderer.swift; sourceTree = "<group>"; };
 		51886B69685ED033F1DF4201 /* HotKeySettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeySettingsWindowController.swift; sourceTree = "<group>"; };
@@ -273,6 +277,7 @@
 				1100B38E7DB377D3BC50BEDD /* ClipboardPayloadTests.swift */,
 				B83AA5D9153BCB34617FE4BB /* ClipboardReaderTests.swift */,
 				C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */,
+				48C5659F84EF659062F4ACE6 /* GIFRecordingPanelLayoutTests.swift */,
 				E7A5C6DBA52A8F44F5FE264E /* GIFRecordingTests.swift */,
 				63A3A5F19559BF4B0E4EAB4A /* HotKeySettingsTests.swift */,
 				3B4D1D5409543C375B7775EE /* LastCaptureRegionTests.swift */,
@@ -357,6 +362,7 @@
 				C8604C0E02CA57406EF483EF /* CoreModule.swift */,
 				F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */,
 				4424594A26365B99274FE812 /* GIFRecording.swift */,
+				2811FEEDB765179FFFDA9584 /* GIFRecordingPanelLayout.swift */,
 				796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */,
 				7368D1CC442ABA318B422684 /* LastCaptureRegion.swift */,
 				2B5C70C5BC478E8A45BAF772 /* PinKeyboardShortcut.swift */,
@@ -510,6 +516,7 @@
 				33F5A5A39F07F24964C1FC6A /* CoreModule.swift in Sources */,
 				913AB3DE332B5C42678EFD81 /* DisplayCoordinateMapper.swift in Sources */,
 				A3BF86F2B6344C84EFC281EE /* GIFRecording.swift in Sources */,
+				7D9F58ADC83F8705BE0FDB65 /* GIFRecordingPanelLayout.swift in Sources */,
 				C5FE2E34AA86C2BD009FB96F /* HotKeySettings.swift in Sources */,
 				1971879E5270F84CBA570387 /* LastCaptureRegion.swift in Sources */,
 				8084712F1CFECA06F0101676 /* PinKeyboardShortcut.swift in Sources */,
@@ -540,6 +547,7 @@
 				F6C0B53DFB082B26B76D2EBB /* ClipboardPayloadTests.swift in Sources */,
 				3CC46B165DF994D36050263F /* ClipboardReaderTests.swift in Sources */,
 				787401C97DF8BF6574DAA11B /* DisplayCoordinateMapperTests.swift in Sources */,
+				FE777BD06082F48D6762B78E /* GIFRecordingPanelLayoutTests.swift in Sources */,
 				B18119F93A2269221AFCBDC8 /* GIFRecordingTests.swift in Sources */,
 				266E803180205334245D585D /* HotKeySettingsTests.swift in Sources */,
 				B7FAD08C20BA6AA703F68B48 /* LastCaptureRegionTests.swift in Sources */,

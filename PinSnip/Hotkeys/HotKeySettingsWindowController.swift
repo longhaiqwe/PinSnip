@@ -6,17 +6,19 @@ final class HotKeySettingsWindowController: NSWindowController {
     typealias ApplyHandler = (HotKeySettings) -> Bool
 
     private let captureRecorder: HotKeyRecorderControl
+    private let recordingRecorder: HotKeyRecorderControl
     private let pasteRecorder: HotKeyRecorderControl
     private let applyHandler: ApplyHandler
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
 
     init(settings: HotKeySettings, applyHandler: @escaping ApplyHandler) {
         captureRecorder = HotKeyRecorderControl(shortcut: settings.capture)
+        recordingRecorder = HotKeyRecorderControl(shortcut: settings.recording)
         pasteRecorder = HotKeyRecorderControl(shortcut: settings.paste)
         self.applyHandler = applyHandler
 
         let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 480, height: 260),
+            contentRect: CGRect(x: 0, y: 0, width: 480, height: 300),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -52,10 +54,12 @@ final class HotKeySettingsWindowController: NSWindowController {
         instructions.textColor = .secondaryLabelColor
 
         captureRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        recordingRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
         pasteRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
 
         let grid = NSGridView(views: [
             [label("截图"), captureRecorder],
+            [label("录制动图"), recordingRecorder],
             [label("剪贴板贴图"), pasteRecorder],
         ])
         grid.rowSpacing = 10
@@ -66,7 +70,7 @@ final class HotKeySettingsWindowController: NSWindowController {
         errorLabel.textColor = .systemRed
         errorLabel.font = .systemFont(ofSize: 12)
 
-        let restoreButton = NSButton(title: "恢复 F1 / F3", target: self, action: #selector(restoreDefaults))
+        let restoreButton = NSButton(title: "恢复 F1 / F3 / F4", target: self, action: #selector(restoreDefaults))
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let cancelButton = NSButton(title: "取消", target: self, action: #selector(cancel))
@@ -109,6 +113,7 @@ final class HotKeySettingsWindowController: NSWindowController {
 
     @objc private func restoreDefaults() {
         captureRecorder.shortcut = HotKeySettings.standard.capture
+        recordingRecorder.shortcut = HotKeySettings.standard.recording
         pasteRecorder.shortcut = HotKeySettings.standard.paste
         errorLabel.stringValue = ""
     }
@@ -120,10 +125,11 @@ final class HotKeySettingsWindowController: NSWindowController {
     @objc private func save() {
         let settings = HotKeySettings(
             capture: captureRecorder.shortcut,
+            recording: recordingRecorder.shortcut,
             paste: pasteRecorder.shortcut
         )
         guard settings.isValid else {
-            errorLabel.stringValue = "截图与贴图需要使用两个不同且有效的快捷键。"
+            errorLabel.stringValue = "截图、动图录制与贴图需要使用三个不同且有效的快捷键。"
             NSSound.beep()
             return
         }

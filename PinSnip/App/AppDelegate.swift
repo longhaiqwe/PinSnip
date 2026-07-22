@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotKeySettingsWindowController: HotKeySettingsWindowController?
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
+    private var recordingMenuItem: NSMenuItem?
     private var pasteMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -23,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let hotKeys = GlobalHotKeyCenter { [weak self] identifier in
             switch identifier {
             case .capture: self?.router.perform(.capture)
+            case .recording: self?.router.perform(.recordAnimatedGIF)
             case .paste: self?.router.perform(.paste)
             }
         }
@@ -83,11 +85,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         let captureItem = menuItem("截图", action: #selector(capture))
+        let recordingItem = menuItem("录制动图…", action: #selector(recordAnimatedGIF))
         let pasteItem = menuItem("剪贴板贴图", action: #selector(paste))
         captureMenuItem = captureItem
+        recordingMenuItem = recordingItem
         pasteMenuItem = pasteItem
         menu.addItem(captureItem)
-        menu.addItem(menuItem("录制动图…", action: #selector(recordAnimatedGIF)))
+        menu.addItem(recordingItem)
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
@@ -127,6 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateHotKeyMenuTitles() {
         captureMenuItem?.title = "截图（\(hotKeySettings.capture.displayName)）"
+        recordingMenuItem?.title = "录制动图…（\(hotKeySettings.recording.displayName)）"
         pasteMenuItem?.title = "剪贴板贴图（\(hotKeySettings.paste.displayName)）"
     }
 
@@ -134,7 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "PinSnip 快捷键注册失败"
-        alert.informativeText = "\(settings.capture.displayName) 或 \(settings.paste.displayName) 已被 macOS 或其他应用占用，仍可从菜单栏使用全部功能。"
+        alert.informativeText = "\(settings.capture.displayName)、\(settings.recording.displayName) 或 \(settings.paste.displayName) 已被 macOS 或其他应用占用，仍可从菜单栏使用全部功能。"
         alert.addButton(withTitle: "打开快捷键设置")
         alert.addButton(withTitle: "稍后")
         if alert.runModal() == .alertFirstButtonReturn {

@@ -35,20 +35,32 @@ public struct HotKeyShortcut: Codable, Equatable, Sendable {
 
 public struct HotKeySettings: Codable, Equatable, Sendable {
     public let capture: HotKeyShortcut
+    public let recording: HotKeyShortcut
     public let paste: HotKeyShortcut
 
-    public init(capture: HotKeyShortcut, paste: HotKeyShortcut) {
+    public init(
+        capture: HotKeyShortcut,
+        recording: HotKeyShortcut,
+        paste: HotKeyShortcut
+    ) {
         self.capture = capture
+        self.recording = recording
         self.paste = paste
     }
 
     public static let standard = HotKeySettings(
         capture: HotKeyShortcut(keyCode: 122),
-        paste: HotKeyShortcut(keyCode: 99)
+        recording: HotKeyShortcut(keyCode: 99),
+        paste: HotKeyShortcut(keyCode: 118)
     )
 
     public var isValid: Bool {
-        capture.isValid && paste.isValid && capture != paste
+        capture.isValid
+            && recording.isValid
+            && paste.isValid
+            && capture != recording
+            && capture != paste
+            && recording != paste
     }
 }
 
@@ -62,18 +74,53 @@ public final class HotKeySettingsStore {
     }
 
     public func load() -> HotKeySettings {
-        guard
-            let data = defaults.data(forKey: key),
-            let settings = try? JSONDecoder().decode(HotKeySettings.self, from: data),
-            settings.isValid
-        else {
-            return .standard
+        guard let data = defaults.data(forKey: key) else { return .standard }
+        let decoder = JSONDecoder()
+        if let settings = try? decoder.decode(HotKeySettings.self, from: data),
+           settings.isValid {
+            return settings
         }
-        return settings
+        guard let legacy = try? decoder.decode(LegacyHotKeySettings.self, from: data),
+              legacy.capture.isValid,
+              legacy.paste.isValid,
+              legacy.capture != legacy.paste
+        else { return .standard }
+        return Self.migrate(legacy)
     }
 
     public func save(_ settings: HotKeySettings) {
         guard settings.isValid, let data = try? JSONEncoder().encode(settings) else { return }
         defaults.set(data, forKey: key)
     }
+
+    private static func migrate(_ legacy: LegacyHotKeySettings) -> HotKeySettings {
+        let preferredRecording = HotKeyShortcut(keyCode: 99)
+        let fallbackFunctionKeys = [118, 96, 97, 98, 100, 101, 109, 103, 111]
+            .map { HotKeyShortcut(keyCode: UInt16($0)) }
+        var recording = preferredRecording
+        var paste = legacy.paste
+
+        if paste == recording {
+            paste = fallbackFunctionKeys.first {
+                $0 != legacy.capture && $0 != recording
+            } ?? HotKeySettings.standard.paste
+        }
+        if recording == legacy.capture {
+            recording = fallbackFunctionKeys.first {
+                $0 != legacy.capture && $0 != paste
+            } ?? HotKeySettings.standard.recording
+        }
+
+        let migrated = HotKeySettings(
+            capture: legacy.capture,
+            recording: recording,
+            paste: paste
+        )
+        return migrated.isValid ? migrated : .standard
+    }
+}
+
+private struct LegacyHotKeySettings: Decodable {
+    let capture: HotKeyShortcut
+    let paste: HotKeyShortcut
 }
