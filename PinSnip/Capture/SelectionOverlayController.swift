@@ -9,6 +9,7 @@ final class SelectionOverlayController: NSWindowController {
         windowCandidates: [WindowCandidate],
         initialPointer: CGPoint,
         initialSelectionRect: CGRect,
+        purpose: CaptureOverlayPurpose,
         onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
@@ -25,6 +26,7 @@ final class SelectionOverlayController: NSWindowController {
             windowCandidates: windowCandidates,
             initialPointer: initialPointer,
             initialSelectionRect: initialSelectionRect,
+            purpose: purpose,
             onResult: onResult,
             onCancel: onCancel
         )

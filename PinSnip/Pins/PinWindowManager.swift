@@ -51,7 +51,9 @@ final class PinWindowManager {
                 return true
             }
         case let .file(url):
-            if let data = try? Data(contentsOf: url), let animation = AnimatedImage(data: data) {
+            if url.pathExtension.lowercased() == "gif",
+               let data = try? Data(contentsOf: url),
+               let animation = AnimatedImage(data: data) {
                 pin(animation)
                 return true
             }

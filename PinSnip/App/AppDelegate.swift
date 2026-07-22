@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func capture() { router.perform(.capture) }
+    @objc private func recordAnimatedGIF() { router.perform(.recordAnimatedGIF) }
     @objc private func captureLastRegion() { router.perform(.captureLastRegion) }
     @objc private func paste() { router.perform(.paste) }
     @objc private func showPins() { router.perform(.showAllPins) }
@@ -61,6 +62,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func perform(_ command: AppCommand) {
         switch command {
         case .capture: captureCoordinator.startCapture()
+        case .recordAnimatedGIF: captureCoordinator.startGIFRecordingSelection()
         case .captureLastRegion: captureCoordinator.startLastRegionCapture()
         case .paste: pinManager.pinClipboard()
         case .showAllPins: pinManager.showAll()
@@ -76,7 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 accessibilityDescription: "PinSnip"
             )
             button.image?.isTemplate = true
-            button.toolTip = "PinSnip — 截图与贴图"
+            button.toolTip = "PinSnip — 截图、动图录制与贴图"
         }
 
         let menu = NSMenu()
@@ -85,6 +87,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         captureMenuItem = captureItem
         pasteMenuItem = pasteItem
         menu.addItem(captureItem)
+        menu.addItem(menuItem("录制动图…", action: #selector(recordAnimatedGIF)))
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))

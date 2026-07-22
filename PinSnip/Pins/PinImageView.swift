@@ -80,6 +80,7 @@ final class PinImageView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
+            setAnimationPaused(true)
             window?.orderOut(nil)
             return
         }

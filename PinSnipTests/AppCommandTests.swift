@@ -3,15 +3,16 @@ import XCTest
 
 @MainActor
 final class AppCommandTests: XCTestCase {
-    func testRoutesCaptureLastRegionAndPasteInOrder() {
+    func testRoutesCaptureRecordingLastRegionAndPasteInOrder() {
         var received: [AppCommand] = []
         let router = AppCommandRouter { received.append($0) }
 
         router.perform(.capture)
+        router.perform(.recordAnimatedGIF)
         router.perform(.captureLastRegion)
         router.perform(.paste)
 
-        XCTAssertEqual(received, [.capture, .captureLastRegion, .paste])
+        XCTAssertEqual(received, [.capture, .recordAnimatedGIF, .captureLastRegion, .paste])
     }
 
     func testDisabledRouterIgnoresCommandsUntilEnabled() {

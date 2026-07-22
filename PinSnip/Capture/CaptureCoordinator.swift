@@ -9,7 +9,10 @@ final class CaptureCoordinator {
     private let pinManager: PinWindowManager
     private var overlay: SelectionOverlayController?
     private var isCapturing = false
+    private var isPreparingGIFRecording = false
     private var lastCaptureRegion: LastCaptureRegion?
+    private var gifRecorder: ScreenGIFRecorder?
+    private var gifRecordingPanel: GIFRecordingPanelController?
 
     init(
         pinManager: PinWindowManager,
@@ -22,7 +25,11 @@ final class CaptureCoordinator {
     }
 
     func startCapture() {
-        startCapture(restoring: nil)
+        startCapture(restoring: nil, purpose: .stillImage)
+    }
+
+    func startGIFRecordingSelection() {
+        startCapture(restoring: nil, purpose: .animatedGIF)
     }
 
     func startLastRegionCapture() {
@@ -30,11 +37,14 @@ final class CaptureCoordinator {
             NSSound.beep()
             return
         }
-        startCapture(restoring: lastCaptureRegion)
+        startCapture(restoring: lastCaptureRegion, purpose: .stillImage)
     }
 
-    private func startCapture(restoring region: LastCaptureRegion?) {
-        guard !isCapturing else { return }
+    private func startCapture(
+        restoring region: LastCaptureRegion?,
+        purpose: CaptureOverlayPurpose
+    ) {
+        guard !isCapturing, !isPreparingGIFRecording, gifRecorder == nil else { return }
         guard permissionGate.ensureAuthorized() else {
             presentScreenCapturePermissionRequired()
             return
@@ -47,7 +57,12 @@ final class CaptureCoordinator {
         Task {
             do {
                 let image = try await captureService.capture(screen)
-                presentOverlay(screen: screen, screenshot: image, restoring: region)
+                presentOverlay(
+                    screen: screen,
+                    screenshot: image,
+                    restoring: region,
+                    purpose: purpose
+                )
             } catch {
                 isCapturing = false
                 presentCaptureError(error)
@@ -58,7 +73,8 @@ final class CaptureCoordinator {
     private func presentOverlay(
         screen: NSScreen,
         screenshot: CGImage,
-        restoring region: LastCaptureRegion?
+        restoring region: LastCaptureRegion?,
+        purpose: CaptureOverlayPurpose
     ) {
         let candidates = windowDetector.candidates(on: screen)
         let mouseLocation = NSEvent.mouseLocation
@@ -73,11 +89,12 @@ final class CaptureCoordinator {
             windowCandidates: candidates,
             initialPointer: initialPointer,
             initialSelectionRect: initialSelectionRect,
+            purpose: purpose,
             onResult: { [weak self] image, selectionRect, action in
                 self?.complete(
                     image: image,
                     selectionRect: selectionRect,
-                    screenSize: screen.frame.size,
+                    screen: screen,
                     action: action
                 )
             },
@@ -90,15 +107,75 @@ final class CaptureCoordinator {
     private func complete(
         image: CGImage,
         selectionRect: CGRect,
-        screenSize: CGSize,
+        screen: NSScreen,
         action: CaptureResultAction
     ) {
-        lastCaptureRegion = LastCaptureRegion(rect: selectionRect, screenSize: screenSize)
+        lastCaptureRegion = LastCaptureRegion(
+            rect: selectionRect,
+            screenSize: screen.frame.size
+        )
+        if case .recordGIF = action {
+            dismissOverlay()
+            beginGIFRecording(screen: screen, selectionRect: selectionRect)
+            return
+        }
         dismissOverlay()
         switch action {
         case .copy: CaptureOutputService.copy(image)
         case .save: CaptureOutputService.save(image)
         case .pin: pinManager.pin(image)
+        case .recordGIF: break
+        }
+    }
+
+    private func beginGIFRecording(screen: NSScreen, selectionRect: CGRect) {
+        isPreparingGIFRecording = true
+        let recorder = ScreenGIFRecorder()
+        gifRecorder = recorder
+        Task {
+            do {
+                try await Task.sleep(for: .milliseconds(180))
+                try await recorder.start(
+                    screen: screen,
+                    selectionRect: selectionRect,
+                    onStopRequested: { [weak self] in self?.stopGIFRecording() }
+                )
+                isPreparingGIFRecording = false
+                let panel = GIFRecordingPanelController(
+                    screen: screen,
+                    selectionRect: selectionRect
+                )
+                panel.onStop = { [weak self] in self?.stopGIFRecording() }
+                gifRecordingPanel = panel
+                panel.present()
+            } catch {
+                recorder.cancel()
+                gifRecorder = nil
+                isPreparingGIFRecording = false
+                presentCaptureError(error)
+            }
+        }
+    }
+
+    private func stopGIFRecording() {
+        guard let recorder = gifRecorder else { return }
+        gifRecordingPanel?.showExporting()
+        Task {
+            let data = await recorder.stop()
+            gifRecordingPanel?.finish()
+            gifRecordingPanel = nil
+            gifRecorder = nil
+            isPreparingGIFRecording = false
+
+            guard let data else {
+                presentGIFEncodingError()
+                return
+            }
+            CaptureOutputService.copyGIF(data)
+            _ = CaptureOutputService.saveGIF(data)
+            if let animation = AnimatedImage(data: data) {
+                pinManager.pin(animation)
+            }
         }
     }
 
@@ -138,6 +215,15 @@ final class CaptureCoordinator {
         if runForeground(alert) == .alertFirstButtonReturn {
             openScreenCaptureSettings()
         }
+    }
+
+    private func presentGIFEncodingError() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "无法生成 GIF"
+        alert.informativeText = "录制帧不足或编码失败，请重新录制。"
+        alert.addButton(withTitle: "好")
+        _ = runForeground(alert)
     }
 
     private func runForeground(_ alert: NSAlert) -> NSApplication.ModalResponse {

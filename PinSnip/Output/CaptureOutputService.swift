@@ -20,6 +20,11 @@ enum CaptureOutputService {
         }
     }
 
+    static func copyGIF(_ data: Data, to pasteboard: NSPasteboard = .general) {
+        pasteboard.clearContents()
+        pasteboard.setData(data, forType: NSPasteboard.PasteboardType(UTType.gif.identifier))
+    }
+
     @discardableResult
     static func save(_ image: CGImage) -> Bool {
         let panel = NSSavePanel()
@@ -46,10 +51,30 @@ enum CaptureOutputService {
         }
     }
 
-    private static func defaultFilename() -> String {
+    @discardableResult
+    static func saveGIF(_ data: Data) -> Bool {
+        let panel = NSSavePanel()
+        panel.title = "保存动图"
+        panel.nameFieldStringValue = defaultFilename(fileExtension: "gif")
+        panel.allowedContentTypes = [.gif]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return false }
+
+        do {
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            let alert = NSAlert(error: error)
+            alert.messageText = "无法保存动图"
+            alert.runModal()
+            return false
+        }
+    }
+
+    private static func defaultFilename(fileExtension: String = "png") -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        return "PinSnip \(formatter.string(from: Date())).png"
+        return "PinSnip \(formatter.string(from: Date())).\(fileExtension)"
     }
 }

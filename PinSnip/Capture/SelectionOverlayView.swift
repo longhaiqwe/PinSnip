@@ -1,10 +1,16 @@
 import AppKit
 import PinSnipCore
 
+enum CaptureOverlayPurpose: Equatable {
+    case stillImage
+    case animatedGIF
+}
+
 enum CaptureResultAction {
     case copy
     case save
     case pin
+    case recordGIF
 }
 
 @MainActor
@@ -37,6 +43,7 @@ final class SelectionOverlayView: NSView {
     }
 
     private let screenshot: CGImage
+    private let purpose: CaptureOverlayPurpose
     private let onResult: (CGImage, CGRect, CaptureResultAction) -> Void
     private let onCancel: () -> Void
     private var phase = Phase.selecting
@@ -64,10 +71,12 @@ final class SelectionOverlayView: NSView {
         windowCandidates: [WindowCandidate],
         initialPointer: CGPoint,
         initialSelectionRect: CGRect,
+        purpose: CaptureOverlayPurpose,
         onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.screenshot = screenshot
+        self.purpose = purpose
         self.onResult = onResult
         self.onCancel = onCancel
         var selectionState = WindowSelectionState(
@@ -161,6 +170,7 @@ final class SelectionOverlayView: NSView {
                 pencilPoints.removeAll()
                 return
             }
+            guard purpose == .stillImage else { return }
             guard selectionRect.contains(point) else { return }
             annotationStart = point
             pencilPoints = [point]
@@ -247,7 +257,7 @@ final class SelectionOverlayView: NSView {
             return
         }
         if event.keyCode == 36 {
-            finish(.copy)
+            finish(purpose == .animatedGIF ? .recordGIF : .copy)
             return
         }
         super.keyDown(with: event)
@@ -268,6 +278,18 @@ final class SelectionOverlayView: NSView {
         stack.edgeInsets = NSEdgeInsets(top: 6, left: 7, bottom: 6, right: 7)
         toolbar.addSubview(stack)
         addSubview(toolbar)
+
+        if purpose == .animatedGIF {
+            let recordButton = button(
+                symbol: "record.circle.fill",
+                help: "开始录制 GIF",
+                tag: 23
+            )
+            recordButton.contentTintColor = .systemRed
+            stack.addArrangedSubview(recordButton)
+            stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
+            return
+        }
 
         addToolButton(.rectangle, symbol: "rectangle", help: "矩形")
         addToolButton(.arrow, symbol: "arrow.up.right", help: "箭头")
@@ -356,6 +378,7 @@ final class SelectionOverlayView: NSView {
         case 20: finish(.copy)
         case 21: finish(.save)
         case 22: finish(.pin)
+        case 23: finish(.recordGIF)
         case 99: onCancel()
         default: break
         }
@@ -495,6 +518,10 @@ final class SelectionOverlayView: NSView {
     }
 
     private func finish(_ action: CaptureResultAction) {
+        if case .recordGIF = action {
+            onResult(screenshot, selectionRect, action)
+            return
+        }
         let scale = CGFloat(screenshot.width) / max(1, bounds.width)
         let mapper = DisplayCoordinateMapper(viewHeight: bounds.height, pixelScale: scale)
         let imageBounds = CGRect(x: 0, y: 0, width: screenshot.width, height: screenshot.height)
