@@ -9,9 +9,21 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     private(set) var transformState = PinTransform()
     var onClose: (() -> Void)?
 
-    init(image: CGImage, origin: NSPoint) {
+    convenience init(image: CGImage, origin: NSPoint) {
+        self.init(image: image, animation: nil, origin: origin)
+    }
+
+    convenience init(animation: AnimatedImage, origin: NSPoint) {
+        self.init(image: animation.frames[0].image, animation: animation, origin: origin)
+    }
+
+    private init(image: CGImage, animation: AnimatedImage?, origin: NSPoint) {
         self.image = image
-        self.imageView = PinImageView(image: image)
+        self.imageView = if let animation {
+            PinImageView(animation: animation)
+        } else {
+            PinImageView(image: image)
+        }
         let naturalSize = NSSize(width: image.width, height: image.height)
         let fit = min(1, min(560 / max(1, naturalSize.width), 420 / max(1, naturalSize.height)))
         self.baseSize = NSSize(width: max(80, naturalSize.width * fit), height: max(60, naturalSize.height * fit))
@@ -48,10 +60,12 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     func show() {
         showWindow(nil)
         window?.orderFrontRegardless()
+        imageView.setAnimationPaused(false)
     }
 
     func setHidden(_ hidden: Bool) {
         hidden ? window?.orderOut(nil) : window?.orderFrontRegardless()
+        imageView.setAnimationPaused(hidden)
     }
 
     func makeInteractive() {
@@ -59,6 +73,7 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowWillClose(_ notification: Notification) {
+        imageView.stopAnimating()
         onClose?()
     }
 

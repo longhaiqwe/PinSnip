@@ -2,7 +2,12 @@ import AppKit
 import Foundation
 
 public enum ClipboardReader {
+    private static let gifType = NSPasteboard.PasteboardType("com.compuserve.gif")
+
     public static func read(from pasteboard: NSPasteboard = .general) -> ClipboardPayload? {
+        if let gif = pasteboard.data(forType: gifType) {
+            return .animatedImageData(gif)
+        }
         if let png = pasteboard.data(forType: .png) {
             return .imageData(png)
         }

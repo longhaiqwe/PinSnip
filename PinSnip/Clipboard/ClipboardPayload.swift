@@ -2,6 +2,7 @@ import Foundation
 
 public enum ClipboardPayload: Equatable, Sendable {
     case imageData(Data)
+    case animatedImageData(Data)
     case file(URL)
     case text(String)
     case color(RGBAColor)

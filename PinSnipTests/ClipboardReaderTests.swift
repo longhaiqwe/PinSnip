@@ -3,6 +3,16 @@ import XCTest
 @testable import PinSnipCore
 
 final class ClipboardReaderTests: XCTestCase {
+    func testReadsGIFDataBeforeStaticImageFallback() throws {
+        let pasteboard = makePasteboard()
+        let gif = Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+        let png = Data([0x89, 0x50, 0x4E, 0x47])
+        pasteboard.setData(gif, forType: NSPasteboard.PasteboardType("com.compuserve.gif"))
+        pasteboard.setData(png, forType: .png)
+
+        XCTAssertEqual(ClipboardReader.read(from: pasteboard), .animatedImageData(gif))
+    }
+
     func testReadsPNGDataBeforeText() throws {
         let pasteboard = makePasteboard()
         let png = Data([0x89, 0x50, 0x4E, 0x47])

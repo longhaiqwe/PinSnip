@@ -3,7 +3,10 @@ import PinSnipCore
 
 @MainActor
 final class PinImageView: NSView {
-    let image: CGImage
+    private let frames: [AnimatedImage.Frame]
+    private var playback: AnimationPlaybackState
+    private var frameTimer: Timer?
+    private var animationIsPaused = true
     var transformState = PinTransform() {
         didSet { needsDisplay = true }
     }
@@ -11,8 +14,20 @@ final class PinImageView: NSView {
     var onKeyAction: ((Character, NSEvent.ModifierFlags) -> Void)?
 
     init(image: CGImage) {
-        self.image = image
+        self.frames = [AnimatedImage.Frame(image: image, duration: 0)]
+        self.playback = AnimationPlaybackState(frameCount: 1)
         super.init(frame: .zero)
+        configureView()
+    }
+
+    init(animation: AnimatedImage) {
+        self.frames = animation.frames
+        self.playback = AnimationPlaybackState(frameCount: animation.frames.count)
+        super.init(frame: .zero)
+        configureView()
+    }
+
+    private func configureView() {
         wantsLayer = true
         layer?.backgroundColor = NSColor.clear.cgColor
     }
@@ -24,6 +39,7 @@ final class PinImageView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let context = NSGraphicsContext.current?.cgContext else { return }
+        let image = frames[playback.frameIndex].image
         context.saveGState()
         context.translateBy(x: bounds.midX, y: bounds.midY)
         if transformState.isFlippedHorizontally {
@@ -48,6 +64,20 @@ final class PinImageView: NSView {
         context.restoreGState()
     }
 
+    func setAnimationPaused(_ paused: Bool) {
+        animationIsPaused = paused
+        if paused {
+            frameTimer?.invalidate()
+            frameTimer = nil
+        } else {
+            scheduleNextFrame()
+        }
+    }
+
+    func stopAnimating() {
+        setAnimationPaused(true)
+    }
+
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
             window?.orderOut(nil)
@@ -68,5 +98,26 @@ final class PinImageView: NSView {
             return
         }
         onKeyAction?(character, event.modifierFlags)
+    }
+
+    private func scheduleNextFrame() {
+        guard frames.count > 1, !animationIsPaused, frameTimer == nil else { return }
+        let duration = max(0.02, frames[playback.frameIndex].duration)
+        let timer = Timer(
+            timeInterval: duration,
+            target: self,
+            selector: #selector(showNextFrame),
+            userInfo: nil,
+            repeats: false
+        )
+        frameTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    @objc private func showNextFrame() {
+        frameTimer = nil
+        playback.advance()
+        needsDisplay = true
+        scheduleNextFrame()
     }
 }

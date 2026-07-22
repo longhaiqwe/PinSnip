@@ -7,6 +7,8 @@ enum ClipboardCardRenderer {
         switch payload {
         case let .imageData(data):
             return NSImage(data: data)?.pinSnipCGImage
+        case let .animatedImageData(data):
+            return NSImage(data: data)?.pinSnipCGImage
         case let .file(url):
             return NSImage(contentsOf: url)?.pinSnipCGImage
         case let .text(text):
@@ -88,4 +90,3 @@ private extension NSImage {
         return cgImage(forProposedRect: &rect, context: nil, hints: nil)
     }
 }
-
