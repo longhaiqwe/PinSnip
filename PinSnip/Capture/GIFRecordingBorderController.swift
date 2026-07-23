@@ -62,17 +62,15 @@ private final class GIFRecordingBorderView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        guard let context = NSGraphicsContext.current?.cgContext else { return }
-        context.saveGState()
-        context.setShadow(
-            offset: .zero,
-            blur: 2,
-            color: NSColor.black.withAlphaComponent(0.72).cgColor
-        )
-        NSColor.systemRed.setStroke()
-        let path = NSBezierPath(roundedRect: borderRect, xRadius: 5, yRadius: 5)
+        let borderColor = GIFRecordingPanelLayout.recordingBorderColor
+        NSColor(
+            srgbRed: borderColor.red,
+            green: borderColor.green,
+            blue: borderColor.blue,
+            alpha: borderColor.alpha
+        ).setStroke()
+        let path = NSBezierPath(rect: borderRect)
         path.lineWidth = lineWidth
         path.stroke()
-        context.restoreGState()
     }
 }

@@ -50,6 +50,7 @@ final class GIFRecordingPanelController: NSWindowController {
         )
         panel.title = "PinSnip 动图录制"
         panel.level = .floating
+        panel.hidesOnDeactivate = GIFRecordingPanelLayout.hidesOnDeactivate
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         super.init(window: panel)

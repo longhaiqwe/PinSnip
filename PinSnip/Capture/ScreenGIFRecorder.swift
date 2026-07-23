@@ -91,7 +91,7 @@ final class ScreenGIFRecorder {
             fallbackDuration: 1 / Self.framesPerSecond
         )
         let frames = capturedFrames
-        let data = AnimatedGIFEncoder.encodeShareCard(frameCount: frames.count) { index in
+        let data = AnimatedGIFEncoder.encodeRecording(frameCount: frames.count) { index in
             guard let source = CGImageSourceCreateWithData(frames[index].pngData as CFData, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
             else { return nil }

@@ -53,6 +53,25 @@ public enum AnimatedGIFEncoder {
         encode(frameCount: frames.count, loopCount: loopCount) { frames[$0] }
     }
 
+    public static func encodeRecording(
+        frames: [AnimatedImage.Frame],
+        loopCount: Int = 0
+    ) -> Data? {
+        encodeRecording(frameCount: frames.count, loopCount: loopCount) { frames[$0] }
+    }
+
+    public static func encodeRecording(
+        frameCount: Int,
+        loopCount: Int = 0,
+        frameProvider: (Int) -> AnimatedImage.Frame?
+    ) -> Data? {
+        encode(
+            frameCount: frameCount,
+            loopCount: loopCount,
+            frameProvider: frameProvider
+        )
+    }
+
     public static func encodeShareCard(
         frames: [AnimatedImage.Frame],
         loopCount: Int = 0
