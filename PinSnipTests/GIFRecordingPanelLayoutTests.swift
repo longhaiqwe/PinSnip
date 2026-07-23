@@ -14,15 +14,15 @@ final class GIFRecordingPanelLayoutTests: XCTestCase {
         )
     }
 
-    func testContentWidthIncludesBothControlsSpacingAndPadding() {
+    func testContentWidthIncludesBothOutputActionsSpacingAndPadding() {
         XCTAssertEqual(
             GIFRecordingPanelLayout.minimumContentWidth(
                 statusWidth: 145,
-                stopButtonWidth: 113,
+                outputButtonWidths: [113, 121],
                 spacing: 14,
                 horizontalPadding: 12
             ),
-            296
+            431
         )
     }
 

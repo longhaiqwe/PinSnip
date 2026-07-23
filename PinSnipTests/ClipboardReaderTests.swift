@@ -3,6 +3,32 @@ import XCTest
 @testable import PinSnipCore
 
 final class ClipboardReaderTests: XCTestCase {
+    func testWritesGIFAsFileWithoutStaticImageFallback() throws {
+        let pasteboard = makePasteboard()
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PinSnipTests.\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let gif = Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+
+        let url = try XCTUnwrap(
+            ClipboardWriter.writeGIF(
+                gif,
+                to: pasteboard,
+                temporaryDirectory: temporaryDirectory
+            )
+        )
+
+        let item = try XCTUnwrap(pasteboard.pasteboardItems?.first)
+        XCTAssertEqual(item.types, [.fileURL])
+        XCTAssertEqual(item.string(forType: .fileURL), url.absoluteString)
+        XCTAssertNil(pasteboard.data(forType: .tiff))
+        XCTAssertEqual(try Data(contentsOf: url), gif)
+    }
+
     func testReadsGIFDataBeforeStaticImageFallback() throws {
         let pasteboard = makePasteboard()
         let gif = Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])

@@ -4,21 +4,26 @@ import PinSnipCore
 @MainActor
 final class GIFRecordingPanelController: NSWindowController {
     private let statusLabel: NSTextField
-    private let stopButton: NSButton
+    private let saveButton: NSButton
+    private let copyButton: NSButton
     private let borderController: GIFRecordingBorderController
     private let startedAt = Date()
     private var timer: Timer?
     private var stopRequested = false
-    var onStop: (() -> Void)?
+    var onStop: ((GIFRecordingOutputAction) -> Void)?
 
     init(screen: NSScreen, selectionRect: CGRect) {
         let statusLabel = NSTextField(labelWithString: "● 录制中 00:00 / 00:30")
         statusLabel.textColor = .systemRed
         statusLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-        let stopButton = NSButton(title: "停止并生成 GIF", target: nil, action: nil)
-        stopButton.bezelStyle = .rounded
+        let saveButton = NSButton(title: "停止并保存…", target: nil, action: nil)
+        saveButton.bezelStyle = .rounded
+        let copyButton = NSButton(title: "停止并复制", target: nil, action: nil)
+        copyButton.bezelStyle = .rounded
+        copyButton.keyEquivalent = "\r"
         self.statusLabel = statusLabel
-        self.stopButton = stopButton
+        self.saveButton = saveButton
+        self.copyButton = copyButton
         borderController = GIFRecordingBorderController(
             screen: screen,
             selectionRect: selectionRect
@@ -28,7 +33,10 @@ final class GIFRecordingPanelController: NSWindowController {
         let spacing: CGFloat = 14
         let width = GIFRecordingPanelLayout.minimumContentWidth(
             statusWidth: statusLabel.intrinsicContentSize.width,
-            stopButtonWidth: stopButton.intrinsicContentSize.width,
+            outputButtonWidths: [
+                saveButton.intrinsicContentSize.width,
+                copyButton.intrinsicContentSize.width
+            ],
             spacing: spacing,
             horizontalPadding: horizontalPadding
         )
@@ -56,9 +64,11 @@ final class GIFRecordingPanelController: NSWindowController {
         super.init(window: panel)
 
         let content = NSView(frame: NSRect(origin: .zero, size: size))
-        stopButton.target = self
-        stopButton.action = #selector(requestStop)
-        let stack = NSStackView(views: [statusLabel, stopButton])
+        saveButton.target = self
+        saveButton.action = #selector(requestSave)
+        copyButton.target = self
+        copyButton.action = #selector(requestCopy)
+        let stack = NSStackView(views: [statusLabel, saveButton, copyButton])
         stack.orientation = .horizontal
         stack.alignment = .centerY
         stack.distribution = .fill
@@ -93,7 +103,8 @@ final class GIFRecordingPanelController: NSWindowController {
         timer = nil
         statusLabel.stringValue = "正在生成 GIF…"
         statusLabel.textColor = .labelColor
-        stopButton.isEnabled = false
+        saveButton.isEnabled = false
+        copyButton.isEnabled = false
     }
 
     func finish() {
@@ -103,11 +114,19 @@ final class GIFRecordingPanelController: NSWindowController {
         close()
     }
 
-    @objc private func requestStop() {
+    @objc private func requestSave() {
+        requestStop(action: .save)
+    }
+
+    @objc private func requestCopy() {
+        requestStop(action: .copy)
+    }
+
+    private func requestStop(action: GIFRecordingOutputAction) {
         guard !stopRequested else { return }
         stopRequested = true
         showExporting()
-        onStop?()
+        onStop?(action)
     }
 
     @objc private func updateElapsedTime() {

@@ -48,6 +48,30 @@ public enum GIFFrameTimeline {
     }
 }
 
+public enum GIFRecordingOutputAction: Equatable, Sendable {
+    case copy
+    case save
+}
+
+public struct GIFRecordingCompletionPlan: Equatable, Sendable {
+    public let copiesToClipboard: Bool
+    public let presentsSavePanel: Bool
+
+    public init(action: GIFRecordingOutputAction) {
+        switch action {
+        case .copy:
+            self.init(copiesToClipboard: true, presentsSavePanel: false)
+        case .save:
+            self.init(copiesToClipboard: false, presentsSavePanel: true)
+        }
+    }
+
+    public init(copiesToClipboard: Bool, presentsSavePanel: Bool) {
+        self.copiesToClipboard = copiesToClipboard
+        self.presentsSavePanel = presentsSavePanel
+    }
+}
+
 public enum AnimatedGIFEncoder {
     public static func encode(frames: [AnimatedImage.Frame], loopCount: Int = 0) -> Data? {
         encode(frameCount: frames.count, loopCount: loopCount) { frames[$0] }

@@ -11,6 +11,32 @@ public enum SelectionResizeHandle: CaseIterable, Equatable, Sendable {
     case west
 }
 
+public enum SelectionOverlayStyle {
+    public static let selectionBorderWidth: CGFloat = 3
+    public static let handleOuterDiameter: CGFloat = 12
+    public static let handleInnerDiameter: CGFloat = 8
+    public static let handleCenterColor = RGBAColor(red: 0, green: 0.478, blue: 1)
+    public static let selectionBorderColor = handleCenterColor
+    public static let handleRingColor = RGBAColor.white
+
+    public static func handleOuterRect(centeredAt center: CGPoint) -> CGRect {
+        square(centeredAt: center, diameter: handleOuterDiameter)
+    }
+
+    public static func handleInnerRect(centeredAt center: CGPoint) -> CGRect {
+        square(centeredAt: center, diameter: handleInnerDiameter)
+    }
+
+    private static func square(centeredAt center: CGPoint, diameter: CGFloat) -> CGRect {
+        CGRect(
+            x: center.x - diameter / 2,
+            y: center.y - diameter / 2,
+            width: diameter,
+            height: diameter
+        )
+    }
+}
+
 public enum SelectionAdjustment {
     public static func center(
         of handle: SelectionResizeHandle,

@@ -6,11 +6,16 @@ public enum GIFRecordingPanelLayout {
 
     public static func minimumContentWidth(
         statusWidth: CGFloat,
-        stopButtonWidth: CGFloat,
+        outputButtonWidths: [CGFloat],
         spacing: CGFloat,
         horizontalPadding: CGFloat
     ) -> CGFloat {
-        ceil(statusWidth + stopButtonWidth + spacing + horizontalPadding * 2)
+        ceil(
+            statusWidth
+                + outputButtonWidths.reduce(0, +)
+                + spacing * CGFloat(outputButtonWidths.count)
+                + horizontalPadding * 2
+        )
     }
 }
 

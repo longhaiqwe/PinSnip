@@ -54,6 +54,26 @@ final class GIFRecordingTests: XCTestCase {
         XCTAssertEqual(decoded.pixelHeight, 3)
     }
 
+    func testCopyCompletionOnlyWritesTheGIFToTheClipboard() {
+        XCTAssertEqual(
+            GIFRecordingCompletionPlan(action: .copy),
+            GIFRecordingCompletionPlan(
+                copiesToClipboard: true,
+                presentsSavePanel: false
+            )
+        )
+    }
+
+    func testSaveCompletionOnlyPresentsTheSavePanel() {
+        XCTAssertEqual(
+            GIFRecordingCompletionPlan(action: .save),
+            GIFRecordingCompletionPlan(
+                copiesToClipboard: false,
+                presentsSavePanel: true
+            )
+        )
+    }
+
     func testShareCardEncodingAddsStableBorderAndPreservesAnimation() throws {
         let frames = [
             AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),

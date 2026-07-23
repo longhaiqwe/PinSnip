@@ -56,9 +56,9 @@ final class SelectionOverlayView: NSView {
     private var currentAnnotation: Annotation?
     private var pencilPoints: [CGPoint] = []
     private var document = AnnotationDocument()
-    private let toolbar = NSVisualEffectView()
+    private let toolbar = NSView()
     private let stack = NSStackView()
-    private let selectionOptionsBar = NSVisualEffectView()
+    private let selectionOptionsBar = NSView()
     private let selectionOptionsStack = NSStackView()
     private let aspectRatioPopUp = NSPopUpButton()
     private var aspectRatioOption = AspectRatioOption.free
@@ -126,9 +126,18 @@ final class SelectionOverlayView: NSView {
         ).setFill()
         mask.fill()
 
-        NSColor.systemCyan.setStroke()
-        let border = NSBezierPath(rect: selectionRect.insetBy(dx: 0.5, dy: 0.5))
-        border.lineWidth = 1
+        let borderColor = SelectionOverlayStyle.selectionBorderColor
+        NSColor(
+            srgbRed: borderColor.red,
+            green: borderColor.green,
+            blue: borderColor.blue,
+            alpha: borderColor.alpha
+        ).setStroke()
+        let borderInset = SelectionOverlayStyle.selectionBorderWidth / 2
+        let border = NSBezierPath(
+            rect: selectionRect.insetBy(dx: borderInset, dy: borderInset)
+        )
+        border.lineWidth = SelectionOverlayStyle.selectionBorderWidth
         border.stroke()
 
         for annotation in document.annotations {
@@ -141,13 +150,27 @@ final class SelectionOverlayView: NSView {
         if phase == .editing {
             for handle in SelectionResizeHandle.allCases {
                 let center = SelectionAdjustment.center(of: handle, in: selectionRect)
-                let handleRect = CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)
-                NSColor.white.setFill()
-                NSColor.systemCyan.setStroke()
-                let path = NSBezierPath(rect: handleRect)
-                path.lineWidth = 1
-                path.fill()
-                path.stroke()
+                let ringColor = SelectionOverlayStyle.handleRingColor
+                NSColor(
+                    srgbRed: ringColor.red,
+                    green: ringColor.green,
+                    blue: ringColor.blue,
+                    alpha: ringColor.alpha
+                ).setFill()
+                NSBezierPath(
+                    ovalIn: SelectionOverlayStyle.handleOuterRect(centeredAt: center)
+                ).fill()
+
+                let centerColor = SelectionOverlayStyle.handleCenterColor
+                NSColor(
+                    srgbRed: centerColor.red,
+                    green: centerColor.green,
+                    blue: centerColor.blue,
+                    alpha: centerColor.alpha
+                ).setFill()
+                NSBezierPath(
+                    ovalIn: SelectionOverlayStyle.handleInnerRect(centeredAt: center)
+                ).fill()
             }
         }
     }
@@ -264,10 +287,17 @@ final class SelectionOverlayView: NSView {
     }
 
     private func configureToolbar() {
-        toolbar.material = .hudWindow
-        toolbar.blendingMode = .withinWindow
-        toolbar.state = .active
+        toolbar.appearance = CaptureToolbarStyle.usesLightControls
+            ? NSAppearance(named: .aqua)
+            : nil
         toolbar.wantsLayer = true
+        let background = CaptureToolbarStyle.backgroundColor
+        toolbar.layer?.backgroundColor = NSColor(
+            srgbRed: background.red,
+            green: background.green,
+            blue: background.blue,
+            alpha: background.alpha
+        ).cgColor
         toolbar.layer?.cornerRadius = 12
         toolbar.layer?.masksToBounds = true
         toolbar.isHidden = true
@@ -280,14 +310,7 @@ final class SelectionOverlayView: NSView {
         addSubview(toolbar)
 
         if purpose == .animatedGIF {
-            let recordButton = button(
-                symbol: "record.circle.fill",
-                help: "开始录制 GIF",
-                tag: 23
-            )
-            recordButton.contentTintColor = .systemRed
-            stack.addArrangedSubview(recordButton)
-            stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
+            CaptureToolbarLayout.animatedGIFActions.forEach(addActionButton)
             return
         }
 
@@ -299,17 +322,21 @@ final class SelectionOverlayView: NSView {
         stack.addArrangedSubview(button(symbol: "arrow.uturn.backward", help: "撤销", tag: 10))
         stack.addArrangedSubview(button(symbol: "arrow.uturn.forward", help: "重做", tag: 11))
         stack.addArrangedSubview(separator())
-        stack.addArrangedSubview(button(symbol: "doc.on.doc", help: "复制分享图", tag: 20))
-        stack.addArrangedSubview(button(symbol: "square.and.arrow.down", help: "保存分享图", tag: 21))
-        stack.addArrangedSubview(button(symbol: "pin", help: "贴原图到屏幕", tag: 22))
-        stack.addArrangedSubview(button(symbol: "xmark", help: "取消", tag: 99))
+        CaptureToolbarLayout.stillImageTrailingActions.forEach(addActionButton)
     }
 
     private func configureSelectionOptionsBar() {
-        selectionOptionsBar.material = .hudWindow
-        selectionOptionsBar.blendingMode = .withinWindow
-        selectionOptionsBar.state = .active
+        selectionOptionsBar.appearance = CaptureToolbarStyle.usesLightControls
+            ? NSAppearance(named: .aqua)
+            : nil
         selectionOptionsBar.wantsLayer = true
+        let background = CaptureToolbarStyle.backgroundColor
+        selectionOptionsBar.layer?.backgroundColor = NSColor(
+            srgbRed: background.red,
+            green: background.green,
+            blue: background.blue,
+            alpha: background.alpha
+        ).cgColor
         selectionOptionsBar.layer?.cornerRadius = 10
         selectionOptionsBar.layer?.masksToBounds = true
 
@@ -347,6 +374,46 @@ final class SelectionOverlayView: NSView {
         stack.addArrangedSubview(control)
     }
 
+    private func addActionButton(_ action: CaptureToolbarAction) {
+        let control: NSButton
+        switch action {
+        case .copy:
+            control = button(
+                symbol: "checkmark",
+                help: "完成并复制分享图",
+                tag: action.rawValue
+            )
+            control.contentTintColor = .systemGreen
+        case .save:
+            control = button(
+                symbol: "square.and.arrow.down",
+                help: "保存分享图",
+                tag: action.rawValue
+            )
+        case .pin:
+            control = button(
+                symbol: "pin",
+                help: "贴原图到屏幕",
+                tag: action.rawValue
+            )
+        case .recordGIF:
+            control = button(
+                symbol: "record.circle.fill",
+                help: "开始录制 GIF",
+                tag: action.rawValue
+            )
+            control.contentTintColor = .systemRed
+        case .cancel:
+            control = button(
+                symbol: "xmark",
+                help: "取消",
+                tag: action.rawValue
+            )
+            control.contentTintColor = .systemRed
+        }
+        stack.addArrangedSubview(control)
+    }
+
     private func button(symbol: String, help: String, tag: Int) -> NSButton {
         let control = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: help)!, target: self, action: #selector(toolbarAction(_:)))
         control.isBordered = false
@@ -375,12 +442,15 @@ final class SelectionOverlayView: NSView {
         switch sender.tag {
         case 10: document.undo(); needsDisplay = true
         case 11: document.redo(); needsDisplay = true
-        case 20: finish(.copy)
-        case 21: finish(.save)
-        case 22: finish(.pin)
-        case 23: finish(.recordGIF)
-        case 99: onCancel()
-        default: break
+        default:
+            guard let action = CaptureToolbarAction(rawValue: sender.tag) else { return }
+            switch action {
+            case .copy: finish(.copy)
+            case .save: finish(.save)
+            case .pin: finish(.pin)
+            case .recordGIF: finish(.recordGIF)
+            case .cancel: onCancel()
+            }
         }
     }
 

@@ -71,6 +71,7 @@
 		B88B845AFA85273F915F3C6F /* WindowDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = F383A809753B4D775B3E3607 /* WindowDetector.swift */; };
 		C06E81E8EADC05DEBA6354FF /* AnimatedImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CCF31CFE4245F20085A4D92 /* AnimatedImage.swift */; };
 		C5FE2E34AA86C2BD009FB96F /* HotKeySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */; };
+		C914C39B605DC4ECB14B392D /* CaptureToolbarLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 299917840C0C90A81766984C /* CaptureToolbarLayout.swift */; };
 		DA7E7E5DE862E6FF8CFAE60F /* SelectionOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC8C822A92EACB2D6CFEA5D1 /* SelectionOverlayView.swift */; };
 		DD8CC13CB1DB34F94DBFBAAA /* PinWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = F979661D090172118AF011DD /* PinWindowManager.swift */; };
 		E31B3CBE3BDCC0EA031C0322 /* AnnotationTransformTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9BE7FF92AF2AB02E37A4DB6B /* AnnotationTransformTests.swift */; };
@@ -80,6 +81,7 @@
 		F654FD7622E7D4203C9F07B7 /* PinSnip.icns in Resources */ = {isa = PBXBuildFile; fileRef = C30C2B5AE94E53DCF3B5FF42 /* PinSnip.icns */; };
 		F6C0B53DFB082B26B76D2EBB /* ClipboardPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1100B38E7DB377D3BC50BEDD /* ClipboardPayloadTests.swift */; };
 		F8FECA1B0B1F230DCC59EF55 /* PinSnipCore.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CB2F74355FA3F2CEEC7ADCC8 /* PinSnipCore.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		FC9D2E865B1FE77588B2BAE9 /* CaptureToolbarLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 85050E6161C0CB030263CA1B /* CaptureToolbarLayoutTests.swift */; };
 		FE6E904CE16E29D2F100202A /* AnimationPlaybackState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E8A6F111E13FCA96AEF4FE2D /* AnimationPlaybackState.swift */; };
 		FE777BD06082F48D6762B78E /* GIFRecordingPanelLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48C5659F84EF659062F4ACE6 /* GIFRecordingPanelLayoutTests.swift */; };
 		FFB9D686CE905A94ADD319CB /* PinTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = 778BA8D913F725B856236B1B /* PinTransform.swift */; };
@@ -141,6 +143,7 @@
 		26D134EB89F2E525FA96A4CD /* GIFRecordingPanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecordingPanelController.swift; sourceTree = "<group>"; };
 		2811FEEDB765179FFFDA9584 /* GIFRecordingPanelLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GIFRecordingPanelLayout.swift; sourceTree = "<group>"; };
 		28F0B6FA3638D99B59287648 /* RGBAColor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RGBAColor.swift; sourceTree = "<group>"; };
+		299917840C0C90A81766984C /* CaptureToolbarLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureToolbarLayout.swift; sourceTree = "<group>"; };
 		2B5C70C5BC478E8A45BAF772 /* PinKeyboardShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinKeyboardShortcut.swift; sourceTree = "<group>"; };
 		2CDAF545D1E31DD4D2EB6290 /* AnimatedImageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimatedImageTests.swift; sourceTree = "<group>"; };
 		32E10620695D3850C5AE7869 /* WindowFrameMapperTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WindowFrameMapperTests.swift; sourceTree = "<group>"; };
@@ -160,6 +163,7 @@
 		778BA8D913F725B856236B1B /* PinTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinTransform.swift; sourceTree = "<group>"; };
 		796BA585D3B18BBB7D35DA71 /* HotKeySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HotKeySettings.swift; sourceTree = "<group>"; };
 		81E25A6B0787938CF9426446 /* AnnotationDocument.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnnotationDocument.swift; sourceTree = "<group>"; };
+		85050E6161C0CB030263CA1B /* CaptureToolbarLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CaptureToolbarLayoutTests.swift; sourceTree = "<group>"; };
 		856D8E5AD67E1BF6D2066417 /* AppIconConfigurationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIconConfigurationTests.swift; sourceTree = "<group>"; };
 		88665745B20E2C62600A327A /* SelectionRect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionRect.swift; sourceTree = "<group>"; };
 		8967B61A6CE84B97ACF51269 /* ScreenGIFRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenGIFRecorder.swift; sourceTree = "<group>"; };
@@ -296,6 +300,7 @@
 				856D8E5AD67E1BF6D2066417 /* AppIconConfigurationTests.swift */,
 				90ED332A131539ED632C4889 /* CaptureOverlayPresentationPolicyTests.swift */,
 				09FDD8FADE96321382403DC5 /* CaptureSessionStateTests.swift */,
+				85050E6161C0CB030263CA1B /* CaptureToolbarLayoutTests.swift */,
 				1100B38E7DB377D3BC50BEDD /* ClipboardPayloadTests.swift */,
 				B83AA5D9153BCB34617FE4BB /* ClipboardReaderTests.swift */,
 				C71E42366B840ABD399DD95D /* DisplayCoordinateMapperTests.swift */,
@@ -382,6 +387,7 @@
 				CA75E5EA8D8F164E250A0BE3 /* AppCommand.swift */,
 				C55FB25BFD98B3A38F352E04 /* CaptureOverlayPresentationPolicy.swift */,
 				DC4D42945E2BC9E38A56D43E /* CaptureSessionState.swift */,
+				299917840C0C90A81766984C /* CaptureToolbarLayout.swift */,
 				C8604C0E02CA57406EF483EF /* CoreModule.swift */,
 				F17B1BC0567CB0EC78C51ACD /* DisplayCoordinateMapper.swift */,
 				4424594A26365B99274FE812 /* GIFRecording.swift */,
@@ -548,6 +554,7 @@
 				38D3AB2D9C4195D70B9B80CC /* AppCommand.swift in Sources */,
 				1C052DAA5235B1F8AF823BB3 /* CaptureOverlayPresentationPolicy.swift in Sources */,
 				615632092A330A65153F47AD /* CaptureSessionState.swift in Sources */,
+				C914C39B605DC4ECB14B392D /* CaptureToolbarLayout.swift in Sources */,
 				E40DA2FC19AF0D5980E884E7 /* ClipboardPayload.swift in Sources */,
 				6F084FB3B44575C69394D88F /* ClipboardReader.swift in Sources */,
 				33F5A5A39F07F24964C1FC6A /* CoreModule.swift in Sources */,
@@ -583,6 +590,7 @@
 				5EEAE8D00648452F1FAAE7DC /* AppIconConfigurationTests.swift in Sources */,
 				427EFA54F0EBBC3EC59E7773 /* CaptureOverlayPresentationPolicyTests.swift in Sources */,
 				4AA527D21E38F74FADEC4BAD /* CaptureSessionStateTests.swift in Sources */,
+				FC9D2E865B1FE77588B2BAE9 /* CaptureToolbarLayoutTests.swift in Sources */,
 				F6C0B53DFB082B26B76D2EBB /* ClipboardPayloadTests.swift in Sources */,
 				3CC46B165DF994D36050263F /* ClipboardReaderTests.swift in Sources */,
 				787401C97DF8BF6574DAA11B /* DisplayCoordinateMapperTests.swift in Sources */,
@@ -675,6 +683,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_APPINTENTS_METADATA_GENERATION = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -695,6 +704,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -763,6 +773,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_APPINTENTS_METADATA_GENERATION = NO;
 				ENABLE_NS_ASSERTIONS = NO;
@@ -777,6 +788,7 @@
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -791,8 +803,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PinSnip/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -809,8 +823,10 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_INJECT_BASE_ENTITLEMENTS = NO;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PinSnip/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (

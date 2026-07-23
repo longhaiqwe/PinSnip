@@ -21,8 +21,9 @@ enum CaptureOutputService {
     }
 
     static func copyGIF(_ data: Data, to pasteboard: NSPasteboard = .general) {
-        pasteboard.clearContents()
-        pasteboard.setData(data, forType: NSPasteboard.PasteboardType(UTType.gif.identifier))
+        if ClipboardWriter.writeGIF(data, to: pasteboard) == nil {
+            NSSound.beep()
+        }
     }
 
     @discardableResult

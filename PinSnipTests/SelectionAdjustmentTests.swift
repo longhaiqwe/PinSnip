@@ -5,6 +5,31 @@ import XCTest
 final class SelectionAdjustmentTests: XCTestCase {
     private let rect = CGRect(x: 20, y: 30, width: 100, height: 80)
 
+    func testOverlayStyleUsesAThickerBorderAndBlueCircularHandlesWithAWhiteRing() {
+        XCTAssertEqual(SelectionOverlayStyle.selectionBorderWidth, 3)
+        XCTAssertEqual(SelectionOverlayStyle.handleOuterDiameter, 12)
+        XCTAssertEqual(SelectionOverlayStyle.handleInnerDiameter, 8)
+        XCTAssertEqual(
+            SelectionOverlayStyle.handleCenterColor,
+            RGBAColor(red: 0, green: 0.478, blue: 1)
+        )
+        XCTAssertEqual(
+            SelectionOverlayStyle.selectionBorderColor,
+            SelectionOverlayStyle.handleCenterColor
+        )
+        XCTAssertEqual(SelectionOverlayStyle.handleRingColor, .white)
+
+        let center = CGPoint(x: 20, y: 30)
+        XCTAssertEqual(
+            SelectionOverlayStyle.handleOuterRect(centeredAt: center),
+            CGRect(x: 14, y: 24, width: 12, height: 12)
+        )
+        XCTAssertEqual(
+            SelectionOverlayStyle.handleInnerRect(centeredAt: center),
+            CGRect(x: 16, y: 26, width: 8, height: 8)
+        )
+    }
+
     func testHitTestingFindsAllEightResizeHandlesButNotTheInterior() {
         let expected: [(CGPoint, SelectionResizeHandle)] = [
             (CGPoint(x: 20, y: 110), .northWest),

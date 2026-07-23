@@ -165,14 +165,18 @@ final class CaptureCoordinator {
                 try await recorder.start(
                     screen: screen,
                     selectionRect: selectionRect,
-                    onStopRequested: { [weak self] in self?.stopGIFRecording() }
+                    onStopRequested: { [weak self] in
+                        self?.stopGIFRecording(action: .copy)
+                    }
                 )
                 isPreparingGIFRecording = false
                 let panel = GIFRecordingPanelController(
                     screen: screen,
                     selectionRect: selectionRect
                 )
-                panel.onStop = { [weak self] in self?.stopGIFRecording() }
+                panel.onStop = { [weak self] action in
+                    self?.stopGIFRecording(action: action)
+                }
                 gifRecordingPanel = panel
                 panel.present()
             } catch {
@@ -184,8 +188,9 @@ final class CaptureCoordinator {
         }
     }
 
-    private func stopGIFRecording() {
+    private func stopGIFRecording(action: GIFRecordingOutputAction) {
         guard let recorder = gifRecorder else { return }
+        let completionPlan = GIFRecordingCompletionPlan(action: action)
         gifRecordingPanel?.showExporting()
         Task {
             let data = await recorder.stop()
@@ -198,10 +203,11 @@ final class CaptureCoordinator {
                 presentGIFEncodingError()
                 return
             }
-            CaptureOutputService.copyGIF(data)
-            _ = CaptureOutputService.saveGIF(data)
-            if let animation = AnimatedImage(data: data) {
-                pinManager.pin(animation)
+            if completionPlan.copiesToClipboard {
+                CaptureOutputService.copyGIF(data)
+            }
+            if completionPlan.presentsSavePanel {
+                _ = CaptureOutputService.saveGIF(data)
             }
         }
     }
