@@ -6,6 +6,14 @@ final class CaptureOverlayPresentationPolicyTests: XCTestCase {
         XCTAssertFalse(CaptureOverlayPresentationPolicy.hidesOnDeactivate)
     }
 
+    func testOverlayPresentationPreservesFrontmostApplication() {
+        XCTAssertTrue(CaptureOverlayPresentationPolicy.preservesFrontmostApplication)
+    }
+
+    func testOverlayAppearsWithoutWindowAnimation() {
+        XCTAssertFalse(CaptureOverlayPresentationPolicy.animatesPresentation)
+    }
+
     func testDimmingStartsOnlyAfterSelectionExists() {
         XCTAssertEqual(
             CaptureOverlayPresentationPolicy.dimmingOpacity(hasSelection: false),
