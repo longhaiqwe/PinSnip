@@ -17,6 +17,9 @@ final class CaptureCoordinator {
     private var lastCaptureRegion: LastCaptureRegion?
     private var gifRecorder: ScreenGIFRecorder?
     private var gifRecordingPanel: GIFRecordingPanelController?
+    private var isPreparingScrollingCapture = false
+    private var scrollingCapture: ScreenScrollingCapture?
+    private var scrollingCapturePanel: ScrollingCapturePanelController?
 
     init(
         pinManager: PinWindowManager,
@@ -36,6 +39,10 @@ final class CaptureCoordinator {
         startCapture(restoring: nil, purpose: .animatedGIF)
     }
 
+    func startScrollingCaptureSelection() {
+        startCapture(restoring: nil, purpose: .scrollingCapture)
+    }
+
     func startLastRegionCapture() {
         guard let lastCaptureRegion else {
             NSSound.beep()
@@ -49,6 +56,7 @@ final class CaptureCoordinator {
         purpose: CaptureOverlayPurpose
     ) {
         guard !isPreparingGIFRecording, gifRecorder == nil,
+              !isPreparingScrollingCapture, scrollingCapture == nil,
               let sessionID = captureSessionState.begin()
         else { return }
         guard permissionGate.ensureAuthorized() else {
@@ -146,12 +154,18 @@ final class CaptureCoordinator {
             beginGIFRecording(screen: screen, selectionRect: selectionRect)
             return
         }
+        if case .scrollCapture = action {
+            dismissOverlay()
+            beginScrollingCapture(screen: screen, selectionRect: selectionRect)
+            return
+        }
         dismissOverlay()
         switch action {
         case .copy: CaptureOutputService.copy(image)
         case .save: CaptureOutputService.save(image)
         case .pin: pinManager.pin(image)
         case .recordGIF: break
+        case .scrollCapture: break
         }
     }
 
@@ -212,6 +226,87 @@ final class CaptureCoordinator {
         }
     }
 
+    private func beginScrollingCapture(
+        screen: NSScreen,
+        selectionRect: CGRect
+    ) {
+        isPreparingScrollingCapture = true
+        let mode: ScrollingCaptureMode = AXIsProcessTrusted() ? .automatic : .manual
+        let capture = ScreenScrollingCapture()
+        scrollingCapture = capture
+        Task {
+            do {
+                try await Task.sleep(for: .milliseconds(180))
+                try await capture.start(
+                    screen: screen,
+                    selectionRect: selectionRect,
+                    mode: mode,
+                    onProgress: { [weak self] frameCount, pixelHeight in
+                        self?.scrollingCapturePanel?.update(
+                            frameCount: frameCount,
+                            pixelHeight: pixelHeight
+                        )
+                    },
+                    onStopRequested: { [weak self] in
+                        self?.stopScrollingCapture(action: .copy)
+                    }
+                )
+                isPreparingScrollingCapture = false
+                let panel = ScrollingCapturePanelController(
+                    screen: screen,
+                    selectionRect: selectionRect,
+                    mode: mode
+                )
+                panel.onCancel = { [weak self] in
+                    self?.cancelScrollingCapture()
+                }
+                panel.onStop = { [weak self] action in
+                    self?.stopScrollingCapture(action: action)
+                }
+                scrollingCapturePanel = panel
+                panel.present()
+            } catch {
+                capture.cancel()
+                scrollingCapture = nil
+                isPreparingScrollingCapture = false
+                presentCaptureError(error)
+            }
+        }
+    }
+
+    private func stopScrollingCapture(action: ScrollingCaptureOutputAction) {
+        guard let capture = scrollingCapture else { return }
+        scrollingCapture = nil
+        scrollingCapturePanel?.showExporting()
+        Task {
+            let image = await capture.stop()
+            scrollingCapturePanel?.finish()
+            scrollingCapturePanel = nil
+            isPreparingScrollingCapture = false
+
+            guard let image else {
+                presentScrollingCaptureError()
+                return
+            }
+            switch action {
+            case .copy:
+                CaptureOutputService.copyScrollingCapture(image)
+            case .save:
+                _ = CaptureOutputService.saveScrollingCapture(image)
+            case .pin:
+                pinManager.pin(image)
+            }
+        }
+    }
+
+    private func cancelScrollingCapture() {
+        scrollingCapture?.cancel()
+        scrollingCapture = nil
+        scrollingCapturePanel?.finish()
+        scrollingCapturePanel = nil
+        isPreparingScrollingCapture = false
+    }
+
     private func cancel() {
         dismissOverlay()
     }
@@ -268,6 +363,15 @@ final class CaptureCoordinator {
         alert.alertStyle = .warning
         alert.messageText = "无法生成 GIF"
         alert.informativeText = "录制帧不足或编码失败，请重新录制。"
+        alert.addButton(withTitle: "好")
+        _ = runForeground(alert)
+    }
+
+    private func presentScrollingCaptureError() {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "无法生成滚动截屏"
+        alert.informativeText = "没有收集到可拼接的页面画面，请重新选择滚动区域后再试。"
         alert.addButton(withTitle: "好")
         _ = runForeground(alert)
     }

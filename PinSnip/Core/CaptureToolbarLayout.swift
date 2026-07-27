@@ -3,6 +3,7 @@ public enum CaptureToolbarAction: Int, Equatable, Sendable {
     case save = 21
     case pin = 22
     case recordGIF = 23
+    case scrollCapture = 24
     case cancel = 99
 }
 
@@ -17,6 +18,7 @@ public enum CaptureToolbarStyle {
 
 public enum CaptureToolbarLayout {
     public static let stillImageTrailingActions: [CaptureToolbarAction] = [
+        .scrollCapture,
         .save,
         .pin,
         .cancel,
@@ -26,5 +28,10 @@ public enum CaptureToolbarLayout {
     public static let animatedGIFActions: [CaptureToolbarAction] = [
         .cancel,
         .recordGIF,
+    ]
+
+    public static let scrollingCaptureActions: [CaptureToolbarAction] = [
+        .cancel,
+        .scrollCapture,
     ]
 }

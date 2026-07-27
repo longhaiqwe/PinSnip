@@ -4,6 +4,7 @@ import PinSnipCore
 enum CaptureOverlayPurpose: Equatable {
     case stillImage
     case animatedGIF
+    case scrollingCapture
 }
 
 enum CaptureResultAction {
@@ -11,6 +12,7 @@ enum CaptureResultAction {
     case save
     case pin
     case recordGIF
+    case scrollCapture
 }
 
 @MainActor
@@ -280,7 +282,11 @@ final class SelectionOverlayView: NSView {
             return
         }
         if event.keyCode == 36 {
-            finish(purpose == .animatedGIF ? .recordGIF : .copy)
+            switch purpose {
+            case .stillImage: finish(.copy)
+            case .animatedGIF: finish(.recordGIF)
+            case .scrollingCapture: finish(.scrollCapture)
+            }
             return
         }
         super.keyDown(with: event)
@@ -311,6 +317,10 @@ final class SelectionOverlayView: NSView {
 
         if purpose == .animatedGIF {
             CaptureToolbarLayout.animatedGIFActions.forEach(addActionButton)
+            return
+        }
+        if purpose == .scrollingCapture {
+            CaptureToolbarLayout.scrollingCaptureActions.forEach(addActionButton)
             return
         }
 
@@ -403,6 +413,13 @@ final class SelectionOverlayView: NSView {
                 tag: action.rawValue
             )
             control.contentTintColor = .systemRed
+        case .scrollCapture:
+            control = button(
+                symbol: "rectangle.stack",
+                help: "滚动截屏",
+                tag: action.rawValue
+            )
+            control.contentTintColor = .systemCyan
         case .cancel:
             control = button(
                 symbol: "xmark",
@@ -449,6 +466,7 @@ final class SelectionOverlayView: NSView {
             case .save: finish(.save)
             case .pin: finish(.pin)
             case .recordGIF: finish(.recordGIF)
+            case .scrollCapture: finish(.scrollCapture)
             case .cancel: onCancel()
             }
         }
@@ -589,6 +607,10 @@ final class SelectionOverlayView: NSView {
 
     private func finish(_ action: CaptureResultAction) {
         if case .recordGIF = action {
+            onResult(screenshot, selectionRect, action)
+            return
+        }
+        if case .scrollCapture = action {
             onResult(screenshot, selectionRect, action)
             return
         }
