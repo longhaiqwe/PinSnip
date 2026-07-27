@@ -13,10 +13,10 @@ final class CaptureToolbarLayoutTests: XCTestCase {
         XCTAssertTrue(CaptureToolbarStyle.usesLightControls)
     }
 
-    func testStillImageActionsPutTheMostCommonCopyActionAtTheFarRight() {
+    func testStillImageActionsIncludeScrollingCaptureAndPutCopyAtTheFarRight() {
         XCTAssertEqual(
             CaptureToolbarLayout.stillImageTrailingActions,
-            [.save, .pin, .cancel, .copy]
+            [.scrollCapture, .save, .pin, .cancel, .copy]
         )
     }
 
@@ -24,6 +24,13 @@ final class CaptureToolbarLayoutTests: XCTestCase {
         XCTAssertEqual(
             CaptureToolbarLayout.animatedGIFActions,
             [.cancel, .recordGIF]
+        )
+    }
+
+    func testScrollingCaptureActionsPutStartAtTheFarRight() {
+        XCTAssertEqual(
+            CaptureToolbarLayout.scrollingCaptureActions,
+            [.cancel, .scrollCapture]
         )
     }
 }

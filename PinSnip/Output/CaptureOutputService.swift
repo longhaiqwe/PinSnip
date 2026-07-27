@@ -5,7 +5,24 @@ import UniformTypeIdentifiers
 @MainActor
 enum CaptureOutputService {
     static func copy(_ image: CGImage, to pasteboard: NSPasteboard = .general) {
-        let output = ShareCardRenderer.render(baseImage: image) ?? image
+        copy(image, decorates: true, to: pasteboard)
+    }
+
+    static func copyScrollingCapture(
+        _ image: CGImage,
+        to pasteboard: NSPasteboard = .general
+    ) {
+        copy(image, decorates: false, to: pasteboard)
+    }
+
+    private static func copy(
+        _ image: CGImage,
+        decorates: Bool,
+        to pasteboard: NSPasteboard
+    ) {
+        let output = decorates
+            ? ShareCardRenderer.render(baseImage: image) ?? image
+            : image
         let representation = NSBitmapImageRep(cgImage: output)
         let nsImage = NSImage(
             cgImage: output,
@@ -28,14 +45,40 @@ enum CaptureOutputService {
 
     @discardableResult
     static func save(_ image: CGImage) -> Bool {
+        save(
+            image,
+            decorates: true,
+            panelTitle: "保存截图",
+            filenamePrefix: "PinSnip"
+        )
+    }
+
+    @discardableResult
+    static func saveScrollingCapture(_ image: CGImage) -> Bool {
+        save(
+            image,
+            decorates: false,
+            panelTitle: "保存滚动截屏",
+            filenamePrefix: "PinSnip 长截图"
+        )
+    }
+
+    private static func save(
+        _ image: CGImage,
+        decorates: Bool,
+        panelTitle: String,
+        filenamePrefix: String
+    ) -> Bool {
         let panel = NSSavePanel()
-        panel.title = "保存截图"
-        panel.nameFieldStringValue = defaultFilename()
+        panel.title = panelTitle
+        panel.nameFieldStringValue = defaultFilename(prefix: filenamePrefix)
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
-        let output = ShareCardRenderer.render(baseImage: image) ?? image
+        let output = decorates
+            ? ShareCardRenderer.render(baseImage: image) ?? image
+            : image
         let representation = NSBitmapImageRep(cgImage: output)
         guard let data = representation.representation(using: .png, properties: [:]) else {
             NSSound.beep()
@@ -72,10 +115,13 @@ enum CaptureOutputService {
         }
     }
 
-    private static func defaultFilename(fileExtension: String = "png") -> String {
+    private static func defaultFilename(
+        prefix: String = "PinSnip",
+        fileExtension: String = "png"
+    ) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "zh_CN")
         formatter.dateFormat = "yyyy-MM-dd HH.mm.ss"
-        return "PinSnip \(formatter.string(from: Date())).\(fileExtension)"
+        return "\(prefix) \(formatter.string(from: Date())).\(fileExtension)"
     }
 }

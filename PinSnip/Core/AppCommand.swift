@@ -2,6 +2,7 @@ import Foundation
 
 public enum AppCommand: Equatable, Sendable {
     case capture
+    case captureScrolling
     case recordAnimatedGIF
     case captureLastRegion
     case paste

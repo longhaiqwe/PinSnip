@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func capture() { router.perform(.capture) }
+    @objc private func captureScrolling() { router.perform(.captureScrolling) }
     @objc private func recordAnimatedGIF() { router.perform(.recordAnimatedGIF) }
     @objc private func captureLastRegion() { router.perform(.captureLastRegion) }
     @objc private func paste() { router.perform(.paste) }
@@ -64,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func perform(_ command: AppCommand) {
         switch command {
         case .capture: captureCoordinator.startCapture()
+        case .captureScrolling: captureCoordinator.startScrollingCaptureSelection()
         case .recordAnimatedGIF: captureCoordinator.startGIFRecordingSelection()
         case .captureLastRegion: captureCoordinator.startLastRegionCapture()
         case .paste: pinManager.pinClipboard()
@@ -80,17 +82,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 accessibilityDescription: "PinSnip"
             )
             button.image?.isTemplate = true
-            button.toolTip = "PinSnip — 截图、动图录制与贴图"
+            button.toolTip = "PinSnip — 截图、滚动截屏、动图录制与贴图"
         }
 
         let menu = NSMenu()
         let captureItem = menuItem("截图", action: #selector(capture))
+        let scrollingItem = menuItem("滚动截屏…", action: #selector(captureScrolling))
         let recordingItem = menuItem("录制动图…", action: #selector(recordAnimatedGIF))
         let pasteItem = menuItem("剪贴板贴图", action: #selector(paste))
         captureMenuItem = captureItem
         recordingMenuItem = recordingItem
         pasteMenuItem = pasteItem
         menu.addItem(captureItem)
+        menu.addItem(scrollingItem)
         menu.addItem(recordingItem)
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
