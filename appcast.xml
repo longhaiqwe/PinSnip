@@ -1,10 +1,20 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
         <title>PinSnip Updates</title>
         <link>https://github.com/longhaiqwe/PinSnip</link>
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
+        <item>
+            <title>0.4.0</title>
+            <pubDate>Wed, 29 Jul 2026 16:07:10 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.4.0</link>
+            <sparkle:version>5</sparkle:version>
+            <sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:releaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.4.0</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.4.0/PinSnip-v0.4.0-macOS-universal.zip" length="2973805" type="application/octet-stream" sparkle:edSignature="fzWrm/i4q4dVeabcFT4v6TYXzhb7ZTFkRiKqOdvqSoUen2c9lnUJsihoDdssbvLoL334/j4s6x1QheZ/1hKNAg=="/>
+        </item>
         <item>
             <title>PinSnip 0.3.1</title>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.3.1</link>
