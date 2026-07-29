@@ -66,6 +66,16 @@ final class SelectionOverlayView: NSView {
     private var aspectRatioOption = AspectRatioOption.free
     private var toolButtons: [Tool: NSButton] = [:]
     private let accent = RGBAColor(red: 0.98, green: 0.31, blue: 0.24)
+    private static let dividerlessHorizontalResizeImage =
+        makeDividerlessHorizontalResizeImage()
+    private static let leftRightResizeCursor =
+        directionalResizeCursor(byDegrees: 0)
+    private static let upDownResizeCursor =
+        directionalResizeCursor(byDegrees: 90)
+    private static let diagonalNorthWestSouthEastCursor =
+        directionalResizeCursor(byDegrees: -45)
+    private static let diagonalNorthEastSouthWestCursor =
+        directionalResizeCursor(byDegrees: 45)
 
     init(
         frame frameRect: NSRect,
@@ -104,6 +114,108 @@ final class SelectionOverlayView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override var acceptsFirstResponder: Bool { true }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard phase == .editing else { return }
+
+        for handle in SelectionResizeHandle.allCases {
+            let center = SelectionAdjustment.center(of: handle, in: selectionRect)
+            let radius = SelectionOverlayStyle.handleHitRadius
+            addCursorRect(
+                CGRect(
+                    x: center.x - radius,
+                    y: center.y - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ),
+                cursor: Self.cursor(for: SelectionAdjustment.cursor(for: handle))
+            )
+        }
+    }
+
+    private static func cursor(for resizeCursor: SelectionResizeCursor) -> NSCursor {
+        switch resizeCursor {
+        case .leftRight:
+            leftRightResizeCursor
+        case .upDown:
+            upDownResizeCursor
+        case .diagonalNorthWestSouthEast:
+            diagonalNorthWestSouthEastCursor
+        case .diagonalNorthEastSouthWest:
+            diagonalNorthEastSouthWestCursor
+        }
+    }
+
+    private static func directionalResizeCursor(byDegrees degrees: CGFloat) -> NSCursor {
+        let sourceImage = dividerlessHorizontalResizeImage
+        let sourceSize = sourceImage.size
+        let radians = degrees * .pi / 180
+        let absoluteCosine = abs(cos(radians))
+        let absoluteSine = abs(sin(radians))
+        let imageSize = NSSize(
+            width: ceil(sourceSize.width * absoluteCosine + sourceSize.height * absoluteSine),
+            height: ceil(sourceSize.width * absoluteSine + sourceSize.height * absoluteCosine)
+        )
+        let image = NSImage(size: imageSize, flipped: false) { rect in
+            NSGraphicsContext.saveGraphicsState()
+            let transform = NSAffineTransform()
+            transform.translateX(by: rect.midX, yBy: rect.midY)
+            transform.rotate(byDegrees: degrees)
+            transform.translateX(
+                by: -sourceSize.width / 2,
+                yBy: -sourceSize.height / 2
+            )
+            transform.concat()
+            sourceImage.draw(
+                in: CGRect(origin: .zero, size: sourceSize),
+                from: CGRect(origin: .zero, size: sourceSize),
+                operation: .sourceOver,
+                fraction: 1
+            )
+            NSGraphicsContext.restoreGraphicsState()
+            return true
+        }
+        return NSCursor(
+            image: image,
+            hotSpot: CGPoint(x: imageSize.width / 2, y: imageSize.height / 2)
+        )
+    }
+
+    private static func makeDividerlessHorizontalResizeImage() -> NSImage {
+        let systemImage = NSCursor.resizeLeftRight.image
+        return NSImage(size: systemImage.size, flipped: false) { rect in
+            let dividerRect = SelectionResizeCursorArtwork.centerDividerClearRect(
+                in: systemImage.size
+            )
+            let inset = SelectionResizeCursorArtwork.arrowInsetTowardsCenter
+            let leftSourceRect = CGRect(
+                x: 0,
+                y: 0,
+                width: dividerRect.minX,
+                height: systemImage.size.height
+            )
+            let rightSourceRect = CGRect(
+                x: dividerRect.maxX,
+                y: 0,
+                width: systemImage.size.width - dividerRect.maxX,
+                height: systemImage.size.height
+            )
+            systemImage.draw(
+                in: leftSourceRect.offsetBy(dx: inset, dy: 0),
+                from: leftSourceRect,
+                operation: .sourceOver,
+                fraction: 1
+            )
+            systemImage.draw(
+                in: rightSourceRect.offsetBy(dx: -inset, dy: 0),
+                from: rightSourceRect,
+                operation: .sourceOver,
+                fraction: 1
+            )
+            return true
+        }
+    }
 
     func addWindowCandidates(_ candidates: [WindowCandidate]) {
         guard phase == .selecting, !candidates.isEmpty else { return }
@@ -194,7 +306,7 @@ final class SelectionOverlayView: NSView {
             if let handle = SelectionAdjustment.handle(
                 at: point,
                 in: selectionRect,
-                hitRadius: 8
+                hitRadius: SelectionOverlayStyle.handleHitRadius
             ) {
                 activeResize = (handle, selectionRect)
                 annotationStart = nil
@@ -255,11 +367,13 @@ final class SelectionOverlayView: NSView {
             selectionOptionsBar.isHidden = true
             updateToolButtons()
             needsLayout = true
+            window?.invalidateCursorRects(for: self)
         case .editing:
             if activeResize != nil {
                 activeResize = nil
                 needsLayout = true
                 needsDisplay = true
+                window?.invalidateCursorRects(for: self)
                 return
             }
             if let currentAnnotation {

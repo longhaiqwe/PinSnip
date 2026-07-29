@@ -11,10 +11,33 @@ public enum SelectionResizeHandle: CaseIterable, Equatable, Sendable {
     case west
 }
 
+public enum SelectionResizeCursor: Equatable, Sendable {
+    case leftRight
+    case upDown
+    case diagonalNorthWestSouthEast
+    case diagonalNorthEastSouthWest
+}
+
+public enum SelectionResizeCursorArtwork {
+    public static let centerDividerWidth: CGFloat = 6
+    public static let arrowInsetTowardsCenter: CGFloat = 2
+
+    public static func centerDividerClearRect(in imageSize: CGSize) -> CGRect {
+        let width = min(centerDividerWidth, max(0, imageSize.width))
+        return CGRect(
+            x: (imageSize.width - width) / 2,
+            y: 0,
+            width: width,
+            height: max(0, imageSize.height)
+        )
+    }
+}
+
 public enum SelectionOverlayStyle {
     public static let selectionBorderWidth: CGFloat = 3
     public static let handleOuterDiameter: CGFloat = 12
     public static let handleInnerDiameter: CGFloat = 8
+    public static let handleHitRadius: CGFloat = 8
     public static let handleCenterColor = RGBAColor(red: 0, green: 0.478, blue: 1)
     public static let selectionBorderColor = handleCenterColor
     public static let handleRingColor = RGBAColor.white
@@ -38,6 +61,21 @@ public enum SelectionOverlayStyle {
 }
 
 public enum SelectionAdjustment {
+    public static func cursor(
+        for handle: SelectionResizeHandle
+    ) -> SelectionResizeCursor {
+        switch handle {
+        case .northWest, .southEast:
+            .diagonalNorthWestSouthEast
+        case .north, .south:
+            .upDown
+        case .northEast, .southWest:
+            .diagonalNorthEastSouthWest
+        case .east, .west:
+            .leftRight
+        }
+    }
+
     public static func center(
         of handle: SelectionResizeHandle,
         in rect: CGRect

@@ -57,6 +57,36 @@ final class SelectionAdjustmentTests: XCTestCase {
         )
     }
 
+    func testEveryResizeHandleUsesMatchingDirectionalCursor() {
+        let expected: [(SelectionResizeHandle, SelectionResizeCursor)] = [
+            (.northWest, .diagonalNorthWestSouthEast),
+            (.north, .upDown),
+            (.northEast, .diagonalNorthEastSouthWest),
+            (.east, .leftRight),
+            (.southEast, .diagonalNorthWestSouthEast),
+            (.south, .upDown),
+            (.southWest, .diagonalNorthEastSouthWest),
+            (.west, .leftRight)
+        ]
+
+        for (handle, cursor) in expected {
+            XCTAssertEqual(SelectionAdjustment.cursor(for: handle), cursor)
+        }
+    }
+
+    func testCursorArtworkClearsOnlyTheSystemCenterDivider() {
+        XCTAssertEqual(
+            SelectionResizeCursorArtwork.centerDividerClearRect(
+                in: CGSize(width: 30, height: 24)
+            ),
+            CGRect(x: 12, y: 0, width: 6, height: 24)
+        )
+    }
+
+    func testCursorArtworkMovesBothArrowheadsTowardTheCenter() {
+        XCTAssertEqual(SelectionResizeCursorArtwork.arrowInsetTowardsCenter, 2)
+    }
+
     func testDraggingCornerResizesFromTheOppositeCorner() {
         let resized = SelectionAdjustment.resize(
             rect,
