@@ -3,6 +3,10 @@ import XCTest
 @testable import PinSnipCore
 
 final class VisualRegionDetectorTests: XCTestCase {
+    func testPrewarmCompletesWithoutScreenshotInput() {
+        VisualRegionDetector().prewarm()
+    }
+
     func testDetectsHighContrastModalInsteadOfNestedCard() throws {
         let image = try XCTUnwrap(makeModalScreenshot())
 

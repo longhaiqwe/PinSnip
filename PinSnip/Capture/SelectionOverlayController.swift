@@ -63,6 +63,11 @@ final class SelectionOverlayController: NSWindowController {
             window?.makeFirstResponder(view)
         }
     }
+
+    func addWindowCandidates(_ candidates: [WindowCandidate]) {
+        (window?.contentView as? SelectionOverlayView)?
+            .addWindowCandidates(candidates)
+    }
 }
 
 private final class CapturePanel: NSPanel {

@@ -60,6 +60,16 @@ final class WindowSelectionStateTests: XCTestCase {
         XCTAssertEqual(state.rect, .zero)
     }
 
+    func testAddingLateCandidateReevaluatesHoveredSelection() {
+        let point = CGPoint(x: 30, y: 30)
+        var state = WindowSelectionState(candidates: [candidates[0]])
+        state.hover(at: point)
+
+        state.addCandidates([candidates[1]], hoveringAt: point)
+
+        XCTAssertEqual(state.rect, candidates[1].frame)
+    }
+
     func testDragAppliesFixedAspectConstraint() {
         var state = WindowSelectionState(candidates: [])
         state.begin(at: CGPoint(x: 10, y: 10))

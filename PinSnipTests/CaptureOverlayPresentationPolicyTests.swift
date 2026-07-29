@@ -2,6 +2,25 @@ import XCTest
 @testable import PinSnipCore
 
 final class CaptureOverlayPresentationPolicyTests: XCTestCase {
+    func testStaticCaptureUsesOneScreenshotAttempt() {
+        XCTAssertEqual(CapturePerformancePolicy.maximumScreenshotAttempts, 1)
+    }
+
+    func testConfiguredRectangleCaptureIsPreferredWhenAvailable() {
+        XCTAssertEqual(
+            CapturePerformancePolicy.captureRoute(
+                supportsConfiguredRectangleCapture: true
+            ),
+            .configuredRectangle
+        )
+        XCTAssertEqual(
+            CapturePerformancePolicy.captureRoute(
+                supportsConfiguredRectangleCapture: false
+            ),
+            .filteredDisplay
+        )
+    }
+
     func testStaticScreenshotDoesNotCaptureCursor() {
         XCTAssertFalse(CaptureCursorPolicy.staticScreenshotShowsCursor)
     }

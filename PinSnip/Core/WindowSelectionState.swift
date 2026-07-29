@@ -3,7 +3,7 @@ import CoreGraphics
 public struct WindowSelectionState: Equatable, Sendable {
     public private(set) var rect = CGRect.zero
 
-    private let candidates: [WindowCandidate]
+    private var candidates: [WindowCandidate]
     private var dragStart: CGPoint?
     private var pressedWindowRect: CGRect?
     private var isDragging = false
@@ -16,6 +16,14 @@ public struct WindowSelectionState: Equatable, Sendable {
     public mutating func hover(at point: CGPoint) {
         guard dragStart == nil else { return }
         rect = WindowCandidate.best(at: point, in: candidates)?.frame ?? .zero
+    }
+
+    public mutating func addCandidates(
+        _ newCandidates: [WindowCandidate],
+        hoveringAt point: CGPoint
+    ) {
+        candidates.append(contentsOf: newCandidates)
+        hover(at: point)
     }
 
     public mutating func begin(at point: CGPoint) {

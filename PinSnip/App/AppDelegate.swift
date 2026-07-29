@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        captureCoordinator.prewarmCaptureAnalysis()
         hotKeySettings = hotKeySettingsStore.load()
         configureStatusItem()
         let hotKeys = GlobalHotKeyCenter { [weak self] identifier in

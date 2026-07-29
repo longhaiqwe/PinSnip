@@ -105,6 +105,13 @@ final class SelectionOverlayView: NSView {
 
     override var acceptsFirstResponder: Bool { true }
 
+    func addWindowCandidates(_ candidates: [WindowCandidate]) {
+        guard phase == .selecting, !candidates.isEmpty else { return }
+        let pointer = bounded(window?.mouseLocationOutsideOfEventStream ?? .zero)
+        selectionState.addCandidates(candidates, hoveringAt: pointer)
+        needsDisplay = true
+    }
+
     override func layout() {
         super.layout()
         layoutSelectionOptionsBar()

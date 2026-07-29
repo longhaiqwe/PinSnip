@@ -20,6 +20,8 @@ final class CaptureCoordinator {
     private var captureSessionState = CaptureSessionState()
     private var captureTask: Task<Void, Never>?
     private var captureTimeoutTask: Task<Void, Never>?
+    private var visualDetectionTask: Task<Void, Never>?
+    private var visualPrewarmTask: Task<Void, Never>?
     private var isPreparingGIFRecording = false
     private var lastCaptureRegion: LastCaptureRegion?
     private var gifRecorder: ScreenGIFRecorder?
@@ -38,6 +40,14 @@ final class CaptureCoordinator {
     ) {
         self.pinManager = pinManager
         self.permissionGate = permissionGate
+    }
+
+    func prewarmCaptureAnalysis() {
+        guard visualPrewarmTask == nil else { return }
+        let visualRegionDetector = visualRegionDetector
+        visualPrewarmTask = Task.detached(priority: .utility) {
+            visualRegionDetector.prewarm()
+        }
     }
 
     func startCapture() {
@@ -87,26 +97,47 @@ final class CaptureCoordinator {
         let captureService = captureService
         captureTask = Task { [weak self] in
             do {
-                let image = try await captureService.capture(screen)
-                guard let self, self.captureSessionState.isCurrent(sessionID) else { return }
-                let currentWindowCandidates = self.windowDetector.candidates(on: screen)
-                let stableWindowCandidates = WindowCandidate.stableCandidates(
-                    before: initialWindowCandidates,
-                    after: currentWindowCandidates
-                )
-                let targetWasStable = !WindowCandidate.requiresRecapture(
-                    at: initialPointer,
-                    before: initialWindowCandidates,
-                    after: currentWindowCandidates
-                )
+                var candidatesBefore = initialWindowCandidates
+                var capturedImage: CGImage?
+                var stableCandidates = [WindowCandidate]()
+                var targetWasStable = false
+
+                for attempt in 0..<CapturePerformancePolicy.maximumScreenshotAttempts {
+                    let image = try await captureService.capture(screen)
+                    guard let self, self.captureSessionState.isCurrent(sessionID) else {
+                        return
+                    }
+                    let candidatesAfter = self.windowDetector.candidates(on: screen)
+                    capturedImage = image
+                    stableCandidates = WindowCandidate.stableCandidates(
+                        before: candidatesBefore,
+                        after: candidatesAfter
+                    )
+                    targetWasStable = !WindowCandidate.requiresRecapture(
+                        at: initialPointer,
+                        before: candidatesBefore,
+                        after: candidatesAfter
+                    )
+                    if targetWasStable { break }
+
+                    candidatesBefore = candidatesAfter
+                    if attempt + 1 < CapturePerformancePolicy.maximumScreenshotAttempts {
+                        await Task.yield()
+                    }
+                }
+
+                guard let self, self.captureSessionState.isCurrent(sessionID),
+                      let capturedImage
+                else { return }
                 self.captureTimeoutTask?.cancel()
                 self.captureTimeoutTask = nil
                 self.captureTask = nil
                 self.presentOverlay(
                     screen: screen,
-                    screenshot: image,
-                    windowCandidates: targetWasStable ? stableWindowCandidates : [],
+                    screenshot: capturedImage,
+                    windowCandidates: targetWasStable ? stableCandidates : [],
                     initialPointer: initialPointer,
+                    sessionID: sessionID,
                     restoring: region,
                     purpose: purpose
                 )
@@ -137,18 +168,15 @@ final class CaptureCoordinator {
         screenshot: CGImage,
         windowCandidates: [WindowCandidate],
         initialPointer: CGPoint,
+        sessionID: UUID,
         restoring region: LastCaptureRegion?,
         purpose: CaptureOverlayPurpose
     ) {
-        let candidates = visualRegionDetector.candidates(
-            in: screenshot,
-            viewSize: screen.frame.size
-        ) + windowCandidates
         let initialSelectionRect = region?.rect(in: screen.frame.size) ?? .zero
         let controller = SelectionOverlayController(
             screen: screen,
             screenshot: screenshot,
-            windowCandidates: candidates,
+            windowCandidates: windowCandidates,
             initialPointer: initialPointer,
             initialSelectionRect: initialSelectionRect,
             purpose: purpose,
@@ -164,6 +192,41 @@ final class CaptureCoordinator {
         )
         overlay = controller
         controller.present()
+        guard region == nil else { return }
+        startVisualRegionDetection(
+            in: screenshot,
+            viewSize: screen.frame.size,
+            sessionID: sessionID
+        )
+    }
+
+    private func startVisualRegionDetection(
+        in screenshot: CGImage,
+        viewSize: CGSize,
+        sessionID: UUID
+    ) {
+        visualDetectionTask?.cancel()
+        let visualRegionDetector = visualRegionDetector
+        visualDetectionTask = Task.detached(priority: .userInitiated) { [weak self] in
+            let candidates = visualRegionDetector.candidates(
+                in: screenshot,
+                viewSize: viewSize
+            )
+            guard !Task.isCancelled else { return }
+            await self?.applyVisualRegionCandidates(
+                candidates,
+                sessionID: sessionID
+            )
+        }
+    }
+
+    private func applyVisualRegionCandidates(
+        _ candidates: [WindowCandidate],
+        sessionID: UUID
+    ) {
+        guard captureSessionState.isCurrent(sessionID) else { return }
+        overlay?.addWindowCandidates(candidates)
+        visualDetectionTask = nil
     }
 
     private func complete(
@@ -377,6 +440,8 @@ final class CaptureCoordinator {
         captureTask = nil
         captureTimeoutTask?.cancel()
         captureTimeoutTask = nil
+        visualDetectionTask?.cancel()
+        visualDetectionTask = nil
         captureSessionState.endCurrent()
         overlay?.close()
         overlay = nil

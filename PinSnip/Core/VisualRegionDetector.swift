@@ -8,6 +8,29 @@ public struct VisualRegionDetector: Sendable {
         self.minimumContrast = minimumContrast
     }
 
+    public func prewarm() {
+        let dimension = 256
+        guard let context = CGContext(
+            data: nil,
+            width: dimension,
+            height: dimension,
+            bitsPerComponent: 8,
+            bytesPerRow: dimension * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return }
+
+        context.setFillColor(CGColor(gray: 0.5, alpha: 1))
+        context.fill(
+            CGRect(x: 0, y: 0, width: dimension, height: dimension)
+        )
+        guard let image = context.makeImage() else { return }
+        _ = candidates(
+            in: image,
+            viewSize: CGSize(width: dimension, height: dimension)
+        )
+    }
+
     public func candidates(
         in image: CGImage,
         viewSize: CGSize
