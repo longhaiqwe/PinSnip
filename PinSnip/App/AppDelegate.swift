@@ -68,7 +68,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .captureScrolling: captureCoordinator.startScrollingCaptureSelection()
         case .recordAnimatedGIF: captureCoordinator.startGIFRecordingSelection()
         case .captureLastRegion: captureCoordinator.startLastRegionCapture()
-        case .paste: pinManager.pinClipboard()
+        case .paste:
+            switch captureCoordinator.pinNextCapturedScreenshot() {
+            case .useClipboard:
+                pinManager.pinClipboard()
+            case .pinned, .historyExhausted:
+                break
+            }
         case .showAllPins: pinManager.showAll()
         case .hideAllPins: pinManager.hideAll()
         }

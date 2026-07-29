@@ -1,12 +1,19 @@
 import AppKit
 import PinSnipCore
 
+enum CapturedScreenshotPasteResult {
+    case pinned
+    case useClipboard
+    case historyExhausted
+}
+
 @MainActor
 final class CaptureCoordinator {
     private static let capturePreparationTimeout: Duration = .seconds(5)
 
     private let captureService = ScreenCaptureService()
     private let windowDetector = WindowDetector()
+    private let visualRegionDetector = VisualRegionDetector()
     private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
     private var overlay: SelectionOverlayController?
@@ -20,6 +27,8 @@ final class CaptureCoordinator {
     private var isPreparingScrollingCapture = false
     private var scrollingCapture: ScreenScrollingCapture?
     private var scrollingCapturePanel: ScrollingCapturePanelController?
+    private var captureHistory = CaptureHistory<Data>(limit: 10)
+    private var historyPasteboardChangeCount: Int?
 
     init(
         pinManager: PinWindowManager,
@@ -111,7 +120,10 @@ final class CaptureCoordinator {
         restoring region: LastCaptureRegion?,
         purpose: CaptureOverlayPurpose
     ) {
-        let candidates = windowDetector.candidates(on: screen)
+        let candidates = visualRegionDetector.candidates(
+            in: screenshot,
+            viewSize: screen.frame.size
+        ) + windowDetector.candidates(on: screen)
         let mouseLocation = NSEvent.mouseLocation
         let initialPointer = CGPoint(
             x: mouseLocation.x - screen.frame.minX,
@@ -167,6 +179,7 @@ final class CaptureCoordinator {
         case .recordGIF: break
         case .scrollCapture: break
         }
+        rememberCapturedScreenshot(image)
     }
 
     private func beginGIFRecording(screen: NSScreen, selectionRect: CGRect) {
@@ -296,7 +309,40 @@ final class CaptureCoordinator {
             case .pin:
                 pinManager.pin(image)
             }
+            rememberCapturedScreenshot(image)
         }
+    }
+
+    func pinNextCapturedScreenshot(
+        pasteboard: NSPasteboard = .general
+    ) -> CapturedScreenshotPasteResult {
+        guard !captureHistory.isEmpty else { return .useClipboard }
+
+        if historyPasteboardChangeCount != pasteboard.changeCount {
+            historyPasteboardChangeCount = pasteboard.changeCount
+            return .useClipboard
+        }
+
+        while let data = captureHistory.nextForPasting() {
+            guard let image = NSBitmapImageRep(data: data)?.cgImage else { continue }
+            pinManager.pin(image)
+            return .pinned
+        }
+
+        NSSound.beep()
+        return .historyExhausted
+    }
+
+    private func rememberCapturedScreenshot(
+        _ image: CGImage,
+        pasteboard: NSPasteboard = .general
+    ) {
+        let representation = NSBitmapImageRep(cgImage: image)
+        guard let data = representation.representation(using: .png, properties: [:]) else {
+            return
+        }
+        captureHistory.record(data)
+        historyPasteboardChangeCount = pasteboard.changeCount
     }
 
     private func cancelScrollingCapture() {
