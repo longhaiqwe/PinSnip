@@ -36,7 +36,7 @@ final class ScreenCaptureService {
         configuration.width = Int(screen.frame.width * screen.backingScaleFactor)
         configuration.height = Int(screen.frame.height * screen.backingScaleFactor)
         configuration.scalesToFit = false
-        configuration.showsCursor = true
+        configuration.showsCursor = CaptureCursorPolicy.staticScreenshotShowsCursor
         configuration.pixelFormat = kCVPixelFormatType_32BGRA
         return try await SCScreenshotManager.captureImage(
             contentFilter: filter,

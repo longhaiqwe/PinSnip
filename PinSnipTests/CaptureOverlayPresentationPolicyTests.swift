@@ -2,6 +2,10 @@ import XCTest
 @testable import PinSnipCore
 
 final class CaptureOverlayPresentationPolicyTests: XCTestCase {
+    func testStaticScreenshotDoesNotCaptureCursor() {
+        XCTAssertFalse(CaptureCursorPolicy.staticScreenshotShowsCursor)
+    }
+
     func testOverlayRemainsVisibleWhenMenuBarAppIsInactive() {
         XCTAssertFalse(CaptureOverlayPresentationPolicy.hidesOnDeactivate)
     }
