@@ -12,6 +12,10 @@ settings:
     CURRENT_PROJECT_VERSION: "4"
     ENABLE_USER_SCRIPT_SANDBOXING: true
     ENABLE_APPINTENTS_METADATA_GENERATION: false
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.2
 targets:
   PinSnip:
     type: application
@@ -27,6 +31,7 @@ targets:
     dependencies:
       - target: PinSnipCore
         embed: true
+      - package: Sparkle
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.longhai.pinsnip

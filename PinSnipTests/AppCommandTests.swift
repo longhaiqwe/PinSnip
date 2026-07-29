@@ -3,7 +3,7 @@ import XCTest
 
 @MainActor
 final class AppCommandTests: XCTestCase {
-    func testRoutesCaptureScrollingRecordingLastRegionAndPasteInOrder() {
+    func testRoutesCaptureScrollingRecordingLastRegionPasteAndUpdateCommandsInOrder() {
         var received: [AppCommand] = []
         let router = AppCommandRouter { received.append($0) }
 
@@ -12,10 +12,22 @@ final class AppCommandTests: XCTestCase {
         router.perform(.recordAnimatedGIF)
         router.perform(.captureLastRegion)
         router.perform(.paste)
+        router.perform(.checkForUpdates)
+        router.perform(.toggleAutomaticUpdateChecks)
+        router.perform(.toggleAutomaticUpdateDownloads)
 
         XCTAssertEqual(
             received,
-            [.capture, .captureScrolling, .recordAnimatedGIF, .captureLastRegion, .paste]
+            [
+                .capture,
+                .captureScrolling,
+                .recordAnimatedGIF,
+                .captureLastRegion,
+                .paste,
+                .checkForUpdates,
+                .toggleAutomaticUpdateChecks,
+                .toggleAutomaticUpdateDownloads,
+            ]
         )
     }
 

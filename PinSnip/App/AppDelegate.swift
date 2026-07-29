@@ -1,9 +1,15 @@
 import AppKit
 import PinSnipCore
+import Sparkle
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pinManager = PinWindowManager()
+    private lazy var updaterController = SPUStandardUpdaterController(
+        startingUpdater: false,
+        updaterDelegate: nil,
+        userDriverDelegate: self
+    )
     private lazy var captureCoordinator = CaptureCoordinator(pinManager: pinManager)
     private lazy var router = AppCommandRouter { [weak self] command in
         self?.perform(command)
@@ -16,12 +22,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var captureMenuItem: NSMenuItem?
     private var recordingMenuItem: NSMenuItem?
     private var pasteMenuItem: NSMenuItem?
+    private var checkForUpdatesMenuItem: NSMenuItem?
+    private var automaticUpdateChecksMenuItem: NSMenuItem?
+    private var automaticUpdateDownloadsMenuItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         captureCoordinator.prewarmCaptureAnalysis()
         hotKeySettings = hotKeySettingsStore.load()
         configureStatusItem()
+        updaterController.startUpdater()
         let hotKeys = GlobalHotKeyCenter { [weak self] identifier in
             switch identifier {
             case .capture: self?.router.perform(.capture)
@@ -46,6 +56,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func paste() { router.perform(.paste) }
     @objc private func showPins() { router.perform(.showAllPins) }
     @objc private func hidePins() { router.perform(.hideAllPins) }
+    @objc private func checkForUpdates() { router.perform(.checkForUpdates) }
+    @objc private func toggleAutomaticUpdateChecks() {
+        router.perform(.toggleAutomaticUpdateChecks)
+    }
+    @objc private func toggleAutomaticUpdateDownloads() {
+        router.perform(.toggleAutomaticUpdateDownloads)
+    }
     @objc private func restoreInteraction() { pinManager.makeAllInteractive() }
     @objc private func showHotKeySettings() {
         if let hotKeySettingsWindowController, hotKeySettingsWindowController.window?.isVisible == true {
@@ -78,6 +95,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         case .showAllPins: pinManager.showAll()
         case .hideAllPins: pinManager.hideAll()
+        case .checkForUpdates:
+            updaterController.checkForUpdates(nil)
+        case .toggleAutomaticUpdateChecks:
+            let updater = updaterController.updater
+            updater.automaticallyChecksForUpdates.toggle()
+            updateUpdateMenuState()
+        case .toggleAutomaticUpdateDownloads:
+            let updater = updaterController.updater
+            guard updater.allowsAutomaticUpdates else { return }
+            updater.automaticallyDownloadsUpdates.toggle()
+            updateUpdateMenuState()
         }
     }
 
@@ -107,6 +135,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(pasteItem)
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
         menu.addItem(.separator())
+        let checkForUpdatesItem = menuItem("检查更新…", action: #selector(checkForUpdates))
+        checkForUpdatesMenuItem = checkForUpdatesItem
+        menu.addItem(checkForUpdatesItem)
+        let automaticChecksItem = menuItem(
+            "自动检查更新",
+            action: #selector(toggleAutomaticUpdateChecks)
+        )
+        let automaticDownloadsItem = menuItem(
+            "自动下载并安装更新",
+            action: #selector(toggleAutomaticUpdateDownloads)
+        )
+        automaticUpdateChecksMenuItem = automaticChecksItem
+        automaticUpdateDownloadsMenuItem = automaticDownloadsItem
+        menu.addItem(automaticChecksItem)
+        menu.addItem(automaticDownloadsItem)
+        menu.addItem(.separator())
         menu.addItem(menuItem("显示全部贴图", action: #selector(showPins)))
         menu.addItem(menuItem("隐藏全部贴图", action: #selector(hidePins)))
         menu.addItem(menuItem("恢复鼠标操作", action: #selector(restoreInteraction)))
@@ -115,6 +159,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.menu = menu
         statusItem = item
         updateHotKeyMenuTitles()
+        updateUpdateMenuState()
     }
 
     private func menuItem(
@@ -146,6 +191,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         pasteMenuItem?.title = "剪贴板贴图（\(hotKeySettings.paste.displayName)）"
     }
 
+    private func updateUpdateMenuState() {
+        let updater = updaterController.updater
+        let state = UpdateMenuState(
+            automaticallyChecksForUpdates: updater.automaticallyChecksForUpdates,
+            automaticallyDownloadsUpdates: updater.automaticallyDownloadsUpdates,
+            allowsAutomaticUpdates: updater.allowsAutomaticUpdates
+        )
+        automaticUpdateChecksMenuItem?.state = state.automaticallyChecksForUpdates ? .on : .off
+        automaticUpdateDownloadsMenuItem?.state = state.automaticallyDownloadsUpdates ? .on : .off
+        automaticUpdateDownloadsMenuItem?.isEnabled = state.canToggleAutomaticDownloads
+    }
+
+    private func applyUpdateReminderState(_ state: UpdateReminderState) {
+        if let button = statusItem?.button {
+            button.image = NSImage(
+                systemSymbolName: state.statusSymbolName,
+                accessibilityDescription: state.availableVersion == nil
+                    ? "PinSnip"
+                    : "PinSnip 有新版本"
+            )
+            button.image?.isTemplate = true
+        }
+        checkForUpdatesMenuItem?.title = state.updateActionTitle
+    }
+
     private func showHotKeyWarning(for settings: HotKeySettings) {
         let alert = NSAlert()
         alert.alertStyle = .informational
@@ -156,5 +226,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if alert.runModal() == .alertFirstButtonReturn {
             showHotKeySettings()
         }
+    }
+}
+
+extension AppDelegate: @preconcurrency SPUStandardUserDriverDelegate {
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        immediateFocus
+    }
+
+    func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        guard !handleShowingUpdate, !state.userInitiated else { return }
+        applyUpdateReminderState(
+            UpdateReminderState(availableVersion: update.displayVersionString)
+        )
+    }
+
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) {
+        applyUpdateReminderState(UpdateReminderState(availableVersion: nil))
+    }
+
+    func standardUserDriverWillFinishUpdateSession() {
+        applyUpdateReminderState(UpdateReminderState(availableVersion: nil))
     }
 }

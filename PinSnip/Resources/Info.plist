@@ -30,5 +30,15 @@
     <string>PinSnip 需要读取屏幕内容，以便创建你主动选择的截图。</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <true/>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUFeedURL</key>
+    <string>https://raw.githubusercontent.com/longhaiqwe/PinSnip/main/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>g20Pu1vfKAFwuVMaJbLpb466EYinaAp84evq6JW9s5Y=</string>
+    <key>SUScheduledCheckInterval</key>
+    <integer>86400</integer>
 </dict>
 </plist>

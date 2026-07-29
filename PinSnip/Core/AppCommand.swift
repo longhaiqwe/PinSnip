@@ -8,6 +8,9 @@ public enum AppCommand: Equatable, Sendable {
     case paste
     case showAllPins
     case hideAllPins
+    case checkForUpdates
+    case toggleAutomaticUpdateChecks
+    case toggleAutomaticUpdateDownloads
 }
 
 @MainActor
