@@ -7,6 +7,7 @@ OUTPUT_DIR="${PROJECT_DIR}/build/Release"
 PINSNIP_VERSION="$(tr -d '[:space:]' < "${PROJECT_DIR}/VERSION")"
 PINSNIP_SIGNING_IDENTITY="${PINSNIP_CODE_SIGN_IDENTITY:-}"
 PINSNIP_SIGNING_TEAM="${PINSNIP_DEVELOPMENT_TEAM:-}"
+source "${SCRIPT_DIR}/lib/release-validation.zsh"
 
 require_universal_binary() {
   local binary_path="$1"
@@ -77,6 +78,9 @@ require_universal_binary "${APP_EXECUTABLE}" "PinSnip"
 require_universal_binary "${CORE_EXECUTABLE}" "PinSnipCore"
 
 if [[ -n "${PINSNIP_SIGNING_IDENTITY}" ]]; then
+  release_entitlements=""
+  signature_details=""
+
   /usr/bin/codesign \
     --force \
     --sign "${PINSNIP_SIGNING_IDENTITY}" \
@@ -90,13 +94,13 @@ if [[ -n "${PINSNIP_SIGNING_IDENTITY}" ]]; then
     --timestamp \
     "${APP_PATH}"
   /usr/bin/codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
-  if /usr/bin/codesign -d --entitlements :- "${APP_PATH}" 2>&1 \
-      | /usr/bin/grep -q "com.apple.security.get-task-allow"; then
+  release_entitlements="$(/usr/bin/codesign -d --entitlements :- "${APP_PATH}" 2>&1)"
+  if release_entitlements_include_get_task_allow "${release_entitlements}"; then
     print -u2 "Release app contains the debug get-task-allow entitlement"
     exit 2
   fi
-  if ! /usr/bin/codesign -dvvv "${APP_PATH}" 2>&1 \
-      | /usr/bin/grep -q "^Timestamp="; then
+  signature_details="$(/usr/bin/codesign -dvvv "${APP_PATH}" 2>&1)"
+  if ! release_signature_has_secure_timestamp "${signature_details}"; then
     print -u2 "Release app is missing a secure signing timestamp"
     exit 2
   fi
