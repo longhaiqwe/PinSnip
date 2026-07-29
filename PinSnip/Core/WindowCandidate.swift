@@ -37,4 +37,40 @@ public struct WindowCandidate: Equatable, Sendable {
                 return lhsArea < rhsArea
             }
     }
+
+    public static func stableCandidates(
+        before: [WindowCandidate],
+        after: [WindowCandidate],
+        tolerance: CGFloat = 0.5
+    ) -> [WindowCandidate] {
+        let previousCandidates = Dictionary(
+            uniqueKeysWithValues: before.map { ($0.id, $0) }
+        )
+        return after.filter { candidate in
+            guard let previous = previousCandidates[candidate.id],
+                  previous.kind == candidate.kind
+            else { return false }
+            return abs(previous.frame.minX - candidate.frame.minX) <= tolerance
+                && abs(previous.frame.minY - candidate.frame.minY) <= tolerance
+                && abs(previous.frame.width - candidate.frame.width) <= tolerance
+                && abs(previous.frame.height - candidate.frame.height) <= tolerance
+        }
+    }
+
+    public static func requiresRecapture(
+        at point: CGPoint,
+        before: [WindowCandidate],
+        after: [WindowCandidate],
+        tolerance: CGFloat = 0.5
+    ) -> Bool {
+        let previous = best(at: point, in: before)
+        let current = best(at: point, in: after)
+        guard previous?.id == current?.id else { return true }
+        guard let current else { return false }
+        return !stableCandidates(
+            before: before,
+            after: after,
+            tolerance: tolerance
+        ).contains(where: { $0.id == current.id })
+    }
 }

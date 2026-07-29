@@ -36,4 +36,72 @@ final class WindowCandidateTests: XCTestCase {
 
         XCTAssertEqual(WindowCandidate.best(at: CGPoint(x: 30, y: 30), in: candidates)?.id, 1)
     }
+
+    func testStableCandidatesExcludeWindowThatMovedDuringScreenshotCapture() {
+        let before = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 100, y: 80, width: 500, height: 360),
+                zOrder: 0
+            )
+        ]
+        let after = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 105, y: 83, width: 500, height: 360),
+                zOrder: 0
+            )
+        ]
+
+        XCTAssertTrue(
+            WindowCandidate.stableCandidates(before: before, after: after).isEmpty
+        )
+    }
+
+    func testStableCandidatesAllowSubpixelCoordinateNoise() {
+        let before = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 100, y: 80, width: 500, height: 360),
+                zOrder: 0
+            )
+        ]
+        let after = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 100.25, y: 79.75, width: 500.25, height: 359.75),
+                zOrder: 0
+            )
+        ]
+
+        XCTAssertEqual(
+            WindowCandidate.stableCandidates(before: before, after: after),
+            after
+        )
+    }
+
+    func testWindowUnderPointerRequiresRecaptureWhenItMoves() {
+        let before = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 100, y: 80, width: 500, height: 360),
+                zOrder: 0
+            )
+        ]
+        let after = [
+            WindowCandidate(
+                id: 1,
+                frame: CGRect(x: 105, y: 83, width: 500, height: 360),
+                zOrder: 0
+            )
+        ]
+
+        XCTAssertTrue(
+            WindowCandidate.requiresRecapture(
+                at: CGPoint(x: 300, y: 200),
+                before: before,
+                after: after
+            )
+        )
+    }
 }

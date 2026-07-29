@@ -78,17 +78,35 @@ final class CaptureCoordinator {
             NSSound.beep()
             return
         }
+        let mouseLocation = NSEvent.mouseLocation
+        let initialPointer = CGPoint(
+            x: mouseLocation.x - screen.frame.minX,
+            y: mouseLocation.y - screen.frame.minY
+        )
+        let initialWindowCandidates = windowDetector.candidates(on: screen)
         let captureService = captureService
         captureTask = Task { [weak self] in
             do {
                 let image = try await captureService.capture(screen)
                 guard let self, self.captureSessionState.isCurrent(sessionID) else { return }
+                let currentWindowCandidates = self.windowDetector.candidates(on: screen)
+                let stableWindowCandidates = WindowCandidate.stableCandidates(
+                    before: initialWindowCandidates,
+                    after: currentWindowCandidates
+                )
+                let targetWasStable = !WindowCandidate.requiresRecapture(
+                    at: initialPointer,
+                    before: initialWindowCandidates,
+                    after: currentWindowCandidates
+                )
                 self.captureTimeoutTask?.cancel()
                 self.captureTimeoutTask = nil
                 self.captureTask = nil
                 self.presentOverlay(
                     screen: screen,
                     screenshot: image,
+                    windowCandidates: targetWasStable ? stableWindowCandidates : [],
+                    initialPointer: initialPointer,
                     restoring: region,
                     purpose: purpose
                 )
@@ -117,18 +135,15 @@ final class CaptureCoordinator {
     private func presentOverlay(
         screen: NSScreen,
         screenshot: CGImage,
+        windowCandidates: [WindowCandidate],
+        initialPointer: CGPoint,
         restoring region: LastCaptureRegion?,
         purpose: CaptureOverlayPurpose
     ) {
         let candidates = visualRegionDetector.candidates(
             in: screenshot,
             viewSize: screen.frame.size
-        ) + windowDetector.candidates(on: screen)
-        let mouseLocation = NSEvent.mouseLocation
-        let initialPointer = CGPoint(
-            x: mouseLocation.x - screen.frame.minX,
-            y: mouseLocation.y - screen.frame.minY
-        )
+        ) + windowCandidates
         let initialSelectionRect = region?.rect(in: screen.frame.size) ?? .zero
         let controller = SelectionOverlayController(
             screen: screen,
