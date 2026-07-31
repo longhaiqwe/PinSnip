@@ -57,15 +57,15 @@ final class UpdateConfigurationTests: XCTestCase {
         )
 
         XCTAssertTrue(appcast.contains("<item>"))
-        XCTAssertTrue(appcast.contains("<sparkle:version>6</sparkle:version>"))
+        XCTAssertTrue(appcast.contains("<sparkle:version>7</sparkle:version>"))
         XCTAssertTrue(
             appcast.contains(
-                "<sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>"
+                "<sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
             appcast.contains(
-                "releases/download/v0.5.0/PinSnip-v0.5.0-macOS-universal.zip"
+                "releases/download/v0.6.0/PinSnip-v0.6.0-macOS-universal.zip"
             )
         )
         XCTAssertTrue(appcast.contains("sparkle:edSignature="))
@@ -80,14 +80,14 @@ final class UpdateConfigurationTests: XCTestCase {
         XCTAssertTrue(
             appcast.contains(
                 "<sparkle:fullReleaseNotesLink>"
-                    + "https://github.com/longhaiqwe/PinSnip/releases/tag/v0.5.0"
+                    + "https://github.com/longhaiqwe/PinSnip/releases/tag/v0.6.0"
                     + "</sparkle:fullReleaseNotesLink>"
             )
         )
         XCTAssertFalse(
             appcast.contains(
                 "raw.githubusercontent.com/longhaiqwe/PinSnip/main/"
-                    + "PinSnip-v0.5.0-macOS-universal.md"
+                    + "PinSnip-v0.6.0-macOS-universal.md"
             )
         )
     }
