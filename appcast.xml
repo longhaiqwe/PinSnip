@@ -6,6 +6,33 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.5.0</title>
+            <pubDate>Fri, 31 Jul 2026 10:20:16 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.5.0</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.5.0</sparkle:fullReleaseNotesLink>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.5.0
+
+### 新功能
+
+- 新增矩形马赛克，可快速遮挡截图中的敏感区域。
+- 新增画笔马赛克，可沿拖动轨迹精细涂抹。
+
+### 改进
+
+- 滚动截屏启动后立即显示准备状态，避免等待期间缺少反馈。
+- 准备阶段禁用保存、贴图和复制操作，开始捕获后自动启用。
+- 加强滚动截屏取消、导出与自身窗口排除保护，减少异常状态和误捕获。
+
+### 下载
+
+推荐下载 `PinSnip-v0.5.0-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.5.0/PinSnip-v0.5.0-macOS-universal.zip" length="2985650" type="application/octet-stream" sparkle:edSignature="TipTcmc8ZvWsjsLGtsBQnGkvZ09fA5ONSkiHvXwlMQb/ySeFf+SyCymLh5Q7sV54mCNF1i1CQNyToOnypBpzAQ=="/>
+        </item>
+        <item>
             <title>0.4.0</title>
             <pubDate>Wed, 29 Jul 2026 16:07:10 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.4.0</link>

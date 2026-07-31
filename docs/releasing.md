@@ -18,7 +18,8 @@ PinSnip 使用 Sparkle 2 获取、验证并安装更新。更新清单托管在�
    `PinSnip-v<版本>-release-notes.md`。
 5. 运行 `./scripts/generate-appcast.sh`。脚本从本机钥匙串临时导出 Sparkle
    EdDSA 私钥到权限为 `0600` 的临时目录，签名完成后立即清理，再更新仓库根目录
-   的 `appcast.xml`。
+   的 `appcast.xml`。更新说明会直接嵌入清单，并将完整说明链接指向对应的
+   GitHub Release 页面，避免依赖仓库中不存在的构建期 Markdown 文件。
 6. 先把 ZIP 上传并发布到对应的 GitHub Release，确认下载 URL 可访问。
 7. 最后提交并推送 `appcast.xml`。不要在安装包可下载前发布清单，避免客户端
    读到暂时不可用的更新。

@@ -10,6 +10,7 @@ ARCHIVE_PATH="${ARCHIVE_DIR}/${ARCHIVE_NAME}"
 RELEASE_NOTES_PATH="${ARCHIVE_DIR}/PinSnip-v${PINSNIP_VERSION}-release-notes.md"
 APPCAST_PATH="${PINSNIP_APPCAST_PATH:-${PROJECT_DIR}/appcast.xml}"
 DOWNLOAD_URL_PREFIX="${PINSNIP_DOWNLOAD_URL_PREFIX:-https://github.com/longhaiqwe/PinSnip/releases/download/v${PINSNIP_VERSION}/}"
+RELEASE_URL="https://github.com/longhaiqwe/PinSnip/releases/tag/v${PINSNIP_VERSION}"
 
 if [[ ! -f "${ARCHIVE_PATH}" ]]; then
   print -u2 "Missing release archive: ${ARCHIVE_PATH}"
@@ -73,7 +74,9 @@ fi
 "${GENERATE_APPCAST}" \
   --ed-key-file "${PRIVATE_KEY_PATH}" \
   --download-url-prefix "${DOWNLOAD_URL_PREFIX}" \
-  --link "https://github.com/longhaiqwe/PinSnip" \
+  --link "${RELEASE_URL}" \
+  --embed-release-notes \
+  --full-release-notes-url "${RELEASE_URL}" \
   --maximum-versions 10 \
   --maximum-deltas 0 \
   -o "${WORK_DIR}/appcast.xml" \

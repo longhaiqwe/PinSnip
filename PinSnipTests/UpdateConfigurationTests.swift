@@ -50,22 +50,44 @@ final class UpdateConfigurationTests: XCTestCase {
         )
     }
 
-    func testBootstrapAppcastPublishesCurrentVersionWithoutAnUnsignedDownload() throws {
+    func testAppcastPublishesCurrentSignedVersion() throws {
         let appcast = try String(
             contentsOf: repositoryRoot.appendingPathComponent("appcast.xml"),
             encoding: .utf8
         )
 
         XCTAssertTrue(appcast.contains("<item>"))
-        XCTAssertTrue(appcast.contains("<sparkle:version>5</sparkle:version>"))
+        XCTAssertTrue(appcast.contains("<sparkle:version>6</sparkle:version>"))
         XCTAssertTrue(
             appcast.contains(
-                "<sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>"
+                "<sparkle:shortVersionString>0.5.0</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
             appcast.contains(
-                "<link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.4.0</link>"
+                "releases/download/v0.5.0/PinSnip-v0.5.0-macOS-universal.zip"
+            )
+        )
+        XCTAssertTrue(appcast.contains("sparkle:edSignature="))
+    }
+
+    func testAppcastReleaseNotesLinkResolvesToPublishedRelease() throws {
+        let appcast = try String(
+            contentsOf: repositoryRoot.appendingPathComponent("appcast.xml"),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(
+            appcast.contains(
+                "<sparkle:fullReleaseNotesLink>"
+                    + "https://github.com/longhaiqwe/PinSnip/releases/tag/v0.5.0"
+                    + "</sparkle:fullReleaseNotesLink>"
+            )
+        )
+        XCTAssertFalse(
+            appcast.contains(
+                "raw.githubusercontent.com/longhaiqwe/PinSnip/main/"
+                    + "PinSnip-v0.5.0-macOS-universal.md"
             )
         )
     }
