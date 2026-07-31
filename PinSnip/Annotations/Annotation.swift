@@ -5,6 +5,8 @@ public enum Annotation: Equatable, Sendable {
     case arrow(from: CGPoint, to: CGPoint, RGBAColor, CGFloat)
     case pencil([CGPoint], RGBAColor, CGFloat)
     case number(center: CGPoint, value: Int, color: RGBAColor, diameter: CGFloat)
+    case mosaic(CGRect, pixelSize: CGFloat)
+    case mosaicPencil([CGPoint], width: CGFloat)
 
     public func mapped(relativeTo origin: CGPoint, scale: CGFloat) -> Annotation {
         func point(_ value: CGPoint) -> CGPoint {
@@ -34,6 +36,18 @@ public enum Annotation: Equatable, Sendable {
                 color: color,
                 diameter: diameter * scale
             )
+        case let .mosaic(rect, pixelSize):
+            return .mosaic(
+                CGRect(
+                    x: (rect.minX - origin.x) * scale,
+                    y: (rect.minY - origin.y) * scale,
+                    width: rect.width * scale,
+                    height: rect.height * scale
+                ),
+                pixelSize: pixelSize * scale
+            )
+        case let .mosaicPencil(points, width):
+            return .mosaicPencil(points.map(point), width: width * scale)
         }
     }
 }

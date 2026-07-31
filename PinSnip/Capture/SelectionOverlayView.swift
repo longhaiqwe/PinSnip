@@ -18,7 +18,7 @@ enum CaptureResultAction {
 @MainActor
 final class SelectionOverlayView: NSView {
     private enum Phase { case selecting, editing }
-    private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3, number = 4 }
+    private enum Tool: Int { case rectangle = 1, arrow = 2, pencil = 3, number = 4, mosaic = 5, mosaicPencil = 6 }
     private enum AspectRatioOption: Int, CaseIterable {
         case free
         case square
@@ -58,6 +58,16 @@ final class SelectionOverlayView: NSView {
     private var currentAnnotation: Annotation?
     private var pencilPoints: [CGPoint] = []
     private var document = AnnotationDocument()
+    private var cachedMosaicNSImage: NSImage?
+    private var mosaicNSImage: NSImage? {
+        if let cachedMosaicNSImage { return cachedMosaicNSImage }
+        let scale = CGFloat(screenshot.width) / max(1, bounds.width)
+        let pixelSize = max(4, 16 * scale)
+        guard let cg = AnnotationRenderer.createMosaicImage(from: screenshot, pixelSize: pixelSize) else { return nil }
+        let image = NSImage(cgImage: cg, size: bounds.size)
+        cachedMosaicNSImage = image
+        return image
+    }
     private let toolbar = NSView()
     private let stack = NSStackView()
     private let selectionOptionsBar = NSView()
@@ -346,7 +356,7 @@ final class SelectionOverlayView: NSView {
                 return
             }
             guard let start = annotationStart else { return }
-            if tool == .pencil {
+            if tool == .pencil || tool == .mosaicPencil {
                 pencilPoints.append(point)
             }
             currentAnnotation = annotation(from: start, to: point)
@@ -449,6 +459,8 @@ final class SelectionOverlayView: NSView {
         addToolButton(.arrow, symbol: "arrow.up.right", help: "箭头")
         addToolButton(.pencil, symbol: "pencil.tip", help: "画笔")
         addToolButton(.number, symbol: "number.circle", help: "序号")
+        addToolButton(.mosaic, symbol: "checkerboard.rectangle", help: "矩形马赛克")
+        addToolButton(.mosaicPencil, symbol: "square.grid.3x3.square", help: "画笔马赛克")
         stack.addArrangedSubview(separator())
         stack.addArrangedSubview(button(symbol: "arrow.uturn.backward", help: "撤销", tag: 10))
         stack.addArrangedSubview(button(symbol: "arrow.uturn.forward", help: "重做", tag: 11))
@@ -642,6 +654,10 @@ final class SelectionOverlayView: NSView {
                 color: accent,
                 diameter: 28
             )
+        case .mosaic:
+            return .mosaic(SelectionRect(start: start, end: end).rect, pixelSize: 16)
+        case .mosaicPencil:
+            return .mosaicPencil(pencilPoints.isEmpty ? [start, end] : pencilPoints, width: 20)
         }
     }
 
@@ -702,6 +718,25 @@ final class SelectionOverlayView: NSView {
                 at: CGPoint(x: center.x - size.width / 2, y: center.y - size.height / 2),
                 withAttributes: attributes
             )
+        case let .mosaic(rect, _):
+            guard let mosaicNSImage else { return }
+            NSGraphicsContext.current?.saveGraphicsState()
+            NSBezierPath(rect: rect).addClip()
+            mosaicNSImage.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
+            NSGraphicsContext.current?.restoreGraphicsState()
+        case let .mosaicPencil(points, width):
+            guard let mosaicNSImage, let first = points.first, let context = NSGraphicsContext.current?.cgContext else { return }
+            context.saveGState()
+            context.beginPath()
+            context.move(to: first)
+            for point in points.dropFirst() { context.addLine(to: point) }
+            context.setLineWidth(max(1, width))
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.replacePathWithStrokedPath()
+            context.clip()
+            mosaicNSImage.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
+            context.restoreGState()
         }
     }
 

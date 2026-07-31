@@ -20,13 +20,61 @@ public enum AnnotationRenderer {
         context.setLineJoin(.round)
         context.setShouldAntialias(true)
 
+        var cachedMosaicImages: [CGFloat: CGImage] = [:]
+        func getMosaicImage(pixelSize: CGFloat) -> CGImage? {
+            let size = max(2, pixelSize)
+            if let existing = cachedMosaicImages[size] { return existing }
+            guard let created = createMosaicImage(from: baseImage, pixelSize: size) else { return nil }
+            cachedMosaicImages[size] = created
+            return created
+        }
+
         for annotation in annotations {
-            draw(annotation, in: context)
+            draw(annotation, in: context, canvas: canvas, getMosaicImage: getMosaicImage)
         }
         return context.makeImage()
     }
 
-    private static func draw(_ annotation: Annotation, in context: CGContext) {
+    public static func createMosaicImage(from baseImage: CGImage, pixelSize: CGFloat) -> CGImage? {
+        let scale = max(2, pixelSize)
+        let smallWidth = max(1, Int(CGFloat(baseImage.width) / scale))
+        let smallHeight = max(1, Int(CGFloat(baseImage.height) / scale))
+
+        guard let smallContext = CGContext(
+            data: nil,
+            width: smallWidth,
+            height: smallHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: smallWidth * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        smallContext.interpolationQuality = .none
+        smallContext.draw(baseImage, in: CGRect(x: 0, y: 0, width: smallWidth, height: smallHeight))
+        guard let smallImage = smallContext.makeImage() else { return nil }
+
+        guard let mosaicContext = CGContext(
+            data: nil,
+            width: baseImage.width,
+            height: baseImage.height,
+            bitsPerComponent: 8,
+            bytesPerRow: baseImage.width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+
+        mosaicContext.interpolationQuality = .none
+        mosaicContext.draw(smallImage, in: CGRect(x: 0, y: 0, width: baseImage.width, height: baseImage.height))
+        return mosaicContext.makeImage()
+    }
+
+    private static func draw(
+        _ annotation: Annotation,
+        in context: CGContext,
+        canvas: CGRect,
+        getMosaicImage: (CGFloat) -> CGImage?
+    ) {
         switch annotation {
         case let .rectangle(rect, color, width):
             configure(context, color: color, width: width)
@@ -74,6 +122,29 @@ public enum AnnotationRenderer {
                 diameter: diameter,
                 in: context
             )
+
+        case let .mosaic(rect, pixelSize):
+            guard let mosaicImage = getMosaicImage(pixelSize) else { return }
+            context.saveGState()
+            context.clip(to: rect)
+            context.draw(mosaicImage, in: canvas)
+            context.restoreGState()
+
+        case let .mosaicPencil(points, width):
+            guard let mosaicImage = getMosaicImage(16), let first = points.first else { return }
+            context.saveGState()
+            context.beginPath()
+            context.move(to: first)
+            for point in points.dropFirst() {
+                context.addLine(to: point)
+            }
+            context.setLineWidth(max(1, width))
+            context.setLineCap(.round)
+            context.setLineJoin(.round)
+            context.replacePathWithStrokedPath()
+            context.clip()
+            context.draw(mosaicImage, in: canvas)
+            context.restoreGState()
         }
     }
 
