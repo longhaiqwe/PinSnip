@@ -6,6 +6,9 @@ final class PinWindowManager {
     private var controllers: [PinWindowController] = []
 
     var count: Int { controllers.count }
+    var hasClickThroughPins: Bool {
+        controllers.contains { $0.isClickThroughEnabled }
+    }
 
     @discardableResult
     func pin(_ image: CGImage, near point: NSPoint = NSEvent.mouseLocation) -> PinWindowController {

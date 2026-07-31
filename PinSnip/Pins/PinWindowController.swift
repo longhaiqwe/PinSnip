@@ -8,6 +8,9 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     private let baseSize: NSSize
     private(set) var transformState = PinTransform()
     var onClose: (() -> Void)?
+    var isClickThroughEnabled: Bool {
+        window?.ignoresMouseEvents == true
+    }
 
     convenience init(image: CGImage, origin: NSPoint) {
         self.init(image: image, animation: nil, origin: origin)

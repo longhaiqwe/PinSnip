@@ -3,7 +3,7 @@ import PinSnipCore
 import Sparkle
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private let pinManager = PinWindowManager()
     private lazy var updaterController = SPUStandardUpdaterController(
         startingUpdater: false,
@@ -76,6 +76,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         router.perform(.toggleAutomaticUpdateDownloads)
     }
     @objc private func restoreInteraction() { pinManager.makeAllInteractive() }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard menuItem.action == #selector(restoreInteraction) else { return true }
+        return pinManager.hasClickThroughPins
+    }
+
     @objc private func selectShareStyle(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
               let style = ShareStyle(rawValue: rawValue)
@@ -184,7 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(.separator())
         menu.addItem(menuItem("显示全部贴图", action: #selector(showPins)))
         menu.addItem(menuItem("隐藏全部贴图", action: #selector(hidePins)))
-        menu.addItem(menuItem("恢复鼠标操作", action: #selector(restoreInteraction)))
+        menu.addItem(menuItem("关闭贴图鼠标穿透", action: #selector(restoreInteraction)))
         menu.addItem(.separator())
         menu.addItem(menuItem("退出 PinSnip", action: #selector(quit), shortcut: "q", modifiers: [.command]))
         item.menu = menu
