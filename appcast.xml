@@ -6,6 +6,33 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.7.0</title>
+            <pubDate>Fri, 31 Jul 2026 23:26:18 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.0</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.0</sparkle:fullReleaseNotesLink>
+            <sparkle:version>8</sparkle:version>
+            <sparkle:shortVersionString>0.7.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.7.0
+
+### 新功能
+
+- 新增「剪纸」「边框」「原图」三种图片样式，可从菜单栏的「图片样式」中切换。
+- 自动记住上次选择，并在普通截图、滚动长图、GIF 与截图贴图中统一使用。
+
+### 改进
+
+- 剪纸样式移除最外层底色，导出区域保持真实透明，不再把棋盘格写入图片。
+- 贴图复制或保存时不会重复套用样式。
+- 「原图」样式保持截图原始尺寸与像素。
+
+### 下载
+
+推荐下载 `PinSnip-v0.7.0-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.7.0/PinSnip-v0.7.0-macOS-universal.zip" length="3022540" type="application/octet-stream" sparkle:edSignature="5QQtk5FFklBElhCwCIQd26I13zwWIXuPL6xDvbjUGucHnwh+pcs6tytskzsBxVFlVL2dej48peA+sekDCEAwDQ=="/>
+        </item>
+        <item>
             <title>0.6.0</title>
             <pubDate>Fri, 31 Jul 2026 13:33:47 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.6.0</link>
