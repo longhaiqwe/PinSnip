@@ -4,24 +4,44 @@ import PinSnipCore
 @MainActor
 final class GIFRecordingPanelController: NSWindowController {
     private let statusLabel: NSTextField
+    private let cancelButton: NSButton
     private let saveButton: NSButton
     private let copyButton: NSButton
     private let borderController: GIFRecordingBorderController
     private let startedAt = Date()
     private var timer: Timer?
     private var stopRequested = false
+    var onCancel: (() -> Void)?
     var onStop: ((GIFRecordingOutputAction) -> Void)?
 
     init(screen: NSScreen, selectionRect: CGRect) {
-        let statusLabel = NSTextField(labelWithString: "● 录制中 00:00 / 00:30")
-        statusLabel.textColor = .systemRed
+        let statusLabel = NSTextField(labelWithString:
+            GIFRecordingPanelLayout.progressText(
+                elapsedSeconds: 0,
+                maximumSeconds: Int(ScreenGIFRecorder.maximumDuration)
+            )
+        )
+        statusLabel.textColor = .labelColor
         statusLabel.font = .monospacedDigitSystemFont(ofSize: 13, weight: .semibold)
-        let saveButton = NSButton(title: "停止并保存…", target: nil, action: nil)
-        saveButton.bezelStyle = .rounded
-        let copyButton = NSButton(title: "停止并复制", target: nil, action: nil)
-        copyButton.bezelStyle = .rounded
+        statusLabel.lineBreakMode = .byTruncatingMiddle
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let cancelButton = Self.iconButton(symbol: "xmark", help: "取消动图录制")
+        cancelButton.keyEquivalent = "\u{1b}"
+        let saveButton = Self.actionButton(
+            title: "保存",
+            symbol: "square.and.arrow.down",
+            help: "停止并保存分享动图…"
+        )
+        let copyButton = Self.actionButton(
+            title: "完成",
+            symbol: "checkmark",
+            help: "停止并复制分享动图"
+        )
+        copyButton.bezelColor = .controlAccentColor
+        copyButton.contentTintColor = .white
         copyButton.keyEquivalent = "\r"
         self.statusLabel = statusLabel
+        self.cancelButton = cancelButton
         self.saveButton = saveButton
         self.copyButton = copyButton
         borderController = GIFRecordingBorderController(
@@ -29,54 +49,92 @@ final class GIFRecordingPanelController: NSWindowController {
             selectionRect: selectionRect
         )
 
-        let horizontalPadding: CGFloat = 12
-        let spacing: CGFloat = 14
-        let width = GIFRecordingPanelLayout.minimumContentWidth(
-            statusWidth: statusLabel.intrinsicContentSize.width,
-            outputButtonWidths: [
-                saveButton.intrinsicContentSize.width,
-                copyButton.intrinsicContentSize.width
-            ],
-            spacing: spacing,
-            horizontalPadding: horizontalPadding
-        )
-        let size = NSSize(width: width, height: 48)
         let globalSelection = selectionRect.offsetBy(dx: screen.frame.minX, dy: screen.frame.minY)
-        var origin = NSPoint(
-            x: min(max(screen.visibleFrame.minX, globalSelection.minX), screen.visibleFrame.maxX - size.width),
-            y: globalSelection.maxY + 10
+        let panelFrame = GIFRecordingPanelLayout.panelFrame(
+            visibleFrame: screen.visibleFrame,
+            selectionFrame: globalSelection
         )
-        if origin.y + size.height > screen.visibleFrame.maxY {
-            origin.y = max(screen.visibleFrame.minY, globalSelection.minY - size.height - 10)
-        }
 
         let panel = NSPanel(
-            contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.titled, .utilityWindow],
+            contentRect: panelFrame,
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.title = "PinSnip 动图录制"
         panel.level = .floating
         panel.hidesOnDeactivate = GIFRecordingPanelLayout.hidesOnDeactivate
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.isMovableByWindowBackground = true
         super.init(window: panel)
 
-        let content = NSView(frame: NSRect(origin: .zero, size: size))
+        cancelButton.target = self
+        cancelButton.action = #selector(cancel)
         saveButton.target = self
         saveButton.action = #selector(requestSave)
         copyButton.target = self
         copyButton.action = #selector(requestCopy)
-        let stack = NSStackView(views: [statusLabel, saveButton, copyButton])
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.distribution = .fill
-        stack.spacing = spacing
-        stack.frame = content.bounds.insetBy(dx: horizontalPadding, dy: 8)
-        stack.autoresizingMask = [.width, .height]
-        content.addSubview(stack)
-        panel.contentView = content
+
+        let effectView = NSVisualEffectView(frame: NSRect(
+            origin: .zero,
+            size: GIFRecordingPanelLayout.contentSize
+        ))
+        effectView.material = .hudWindow
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = GIFRecordingPanelLayout.cornerRadius
+        effectView.layer?.masksToBounds = true
+        effectView.layer?.borderWidth = 0.5
+        effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+
+        let statusImage = NSImageView(image: NSImage(
+            systemSymbolName: "record.circle.fill",
+            accessibilityDescription: "正在录制动图"
+        )!)
+        statusImage.contentTintColor = .systemRed
+        statusImage.symbolConfiguration = NSImage.SymbolConfiguration(
+            pointSize: 13,
+            weight: .semibold
+        )
+        statusImage.setContentHuggingPriority(.required, for: .horizontal)
+
+        let statusStack = NSStackView(views: [statusImage, statusLabel])
+        statusStack.orientation = .horizontal
+        statusStack.alignment = .centerY
+        statusStack.spacing = 7
+        statusStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.setContentHuggingPriority(.required, for: .horizontal)
+        separator.widthAnchor.constraint(equalToConstant: 1).isActive = true
+
+        let actionsStack = NSStackView(
+            views: [cancelButton, saveButton, copyButton]
+        )
+        actionsStack.orientation = .horizontal
+        actionsStack.alignment = .centerY
+        actionsStack.spacing = 6
+        actionsStack.setContentHuggingPriority(.required, for: .horizontal)
+
+        let rootStack = NSStackView(views: [statusStack, separator, actionsStack])
+        rootStack.orientation = .horizontal
+        rootStack.alignment = .centerY
+        rootStack.spacing = 10
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
+        effectView.addSubview(rootStack)
+        NSLayoutConstraint.activate([
+            rootStack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: 13),
+            rootStack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -10),
+            rootStack.centerYAnchor.constraint(equalTo: effectView.centerYAnchor),
+            cancelButton.widthAnchor.constraint(equalToConstant: 28),
+        ])
+        panel.contentView = effectView
     }
 
     @available(*, unavailable)
@@ -84,7 +142,6 @@ final class GIFRecordingPanelController: NSWindowController {
 
     func present() {
         borderController.present()
-        showWindow(nil)
         window?.orderFrontRegardless()
         let timer = Timer(
             timeInterval: 0.2,
@@ -101,8 +158,9 @@ final class GIFRecordingPanelController: NSWindowController {
         borderController.dismiss()
         timer?.invalidate()
         timer = nil
-        statusLabel.stringValue = "正在生成 GIF…"
+        statusLabel.stringValue = "正在生成分享动图…"
         statusLabel.textColor = .labelColor
+        cancelButton.isEnabled = false
         saveButton.isEnabled = false
         copyButton.isEnabled = false
     }
@@ -116,6 +174,12 @@ final class GIFRecordingPanelController: NSWindowController {
 
     @objc private func requestSave() {
         requestStop(action: .save)
+    }
+
+    @objc private func cancel() {
+        guard !stopRequested else { return }
+        stopRequested = true
+        onCancel?()
     }
 
     @objc private func requestCopy() {
@@ -134,10 +198,41 @@ final class GIFRecordingPanelController: NSWindowController {
             Int(Date().timeIntervalSince(startedAt)),
             Int(ScreenGIFRecorder.maximumDuration)
         )
-        statusLabel.stringValue = String(
-            format: "● 录制中 00:%02d / 00:%02d",
-            seconds,
-            Int(ScreenGIFRecorder.maximumDuration)
+        statusLabel.stringValue = GIFRecordingPanelLayout.progressText(
+            elapsedSeconds: seconds,
+            maximumSeconds: Int(ScreenGIFRecorder.maximumDuration)
         )
+    }
+
+    private static func iconButton(symbol: String, help: String) -> NSButton {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: help
+        )
+        button.imagePosition = .imageOnly
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
+    }
+
+    private static func actionButton(
+        title: String,
+        symbol: String,
+        help: String
+    ) -> NSButton {
+        let button = NSButton(title: title, target: nil, action: nil)
+        button.image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: help
+        )
+        button.imagePosition = .imageLeading
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
     }
 }

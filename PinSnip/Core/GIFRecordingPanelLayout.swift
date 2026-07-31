@@ -1,20 +1,36 @@
 import CoreGraphics
+import Foundation
 
 public enum GIFRecordingPanelLayout {
+    public static let usesTitleBar = false
     public static let hidesOnDeactivate = false
+    public static let contentSize = CGSize(width: 400, height: 50)
+    public static let cornerRadius = ScrollingCapturePanelLayout.cornerRadius
     public static let recordingBorderColor = SelectionOverlayStyle.selectionBorderColor
 
-    public static func minimumContentWidth(
-        statusWidth: CGFloat,
-        outputButtonWidths: [CGFloat],
-        spacing: CGFloat,
-        horizontalPadding: CGFloat
-    ) -> CGFloat {
-        ceil(
-            statusWidth
-                + outputButtonWidths.reduce(0, +)
-                + spacing * CGFloat(outputButtonWidths.count)
-                + horizontalPadding * 2
+    public static func progressText(
+        elapsedSeconds: Int,
+        maximumSeconds: Int
+    ) -> String {
+        let elapsed = max(0, elapsedSeconds)
+        let maximum = max(0, maximumSeconds)
+        return String(
+            format: "录制中 · %02d:%02d / %02d:%02d",
+            elapsed / 60,
+            elapsed % 60,
+            maximum / 60,
+            maximum % 60
+        )
+    }
+
+    public static func panelFrame(
+        visibleFrame: CGRect,
+        selectionFrame: CGRect
+    ) -> CGRect {
+        ScrollingCapturePanelLayout.panelFrame(
+            visibleFrame: visibleFrame,
+            selectionFrame: selectionFrame,
+            size: contentSize
         )
     }
 }

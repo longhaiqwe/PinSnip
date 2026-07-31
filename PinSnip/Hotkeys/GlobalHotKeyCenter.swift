@@ -8,10 +8,12 @@ final class GlobalHotKeyCenter {
         case capture = 1
         case recording = 2
         case paste = 3
+        case cancelActiveCapture = 4
     }
 
     private let handler: (Identifier) -> Void
     private var hotKeys: [Identifier: EventHotKeyRef] = [:]
+    private var captureCancellationHotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var activeSettings: HotKeySettings?
     private let signature: OSType = 0x504E5350
@@ -45,12 +47,42 @@ final class GlobalHotKeyCenter {
     }
 
     func shutdown() {
+        setCaptureCancellationEnabled(false)
         unregisterHotKeys()
         activeSettings = nil
         if let eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
         }
+    }
+
+    @discardableResult
+    func setCaptureCancellationEnabled(_ isEnabled: Bool) -> Bool {
+        if !isEnabled {
+            if let captureCancellationHotKey {
+                UnregisterEventHotKey(captureCancellationHotKey)
+                self.captureCancellationHotKey = nil
+            }
+            return true
+        }
+        guard captureCancellationHotKey == nil else { return true }
+
+        var reference: EventHotKeyRef?
+        let hotKeyID = EventHotKeyID(
+            signature: signature,
+            id: Identifier.cancelActiveCapture.rawValue
+        )
+        let status = RegisterEventHotKey(
+            CapturePanelKeyboardShortcut.escapeKeyCode,
+            0,
+            hotKeyID,
+            GetApplicationEventTarget(),
+            0,
+            &reference
+        )
+        guard status == noErr, let reference else { return false }
+        captureCancellationHotKey = reference
+        return true
     }
 
     private func registerAll(_ settings: HotKeySettings) -> Bool {

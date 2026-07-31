@@ -5,24 +5,21 @@ import UniformTypeIdentifiers
 @MainActor
 enum CaptureOutputService {
     static func copy(_ image: CGImage, to pasteboard: NSPasteboard = .general) {
-        copy(image, decorates: true, to: pasteboard)
+        writeImage(image, to: pasteboard)
     }
 
     static func copyScrollingCapture(
         _ image: CGImage,
         to pasteboard: NSPasteboard = .general
     ) {
-        copy(image, decorates: false, to: pasteboard)
+        writeImage(image, to: pasteboard)
     }
 
-    private static func copy(
+    private static func writeImage(
         _ image: CGImage,
-        decorates: Bool,
         to pasteboard: NSPasteboard
     ) {
-        let output = decorates
-            ? ShareCardRenderer.render(baseImage: image) ?? image
-            : image
+        let output = ShareCardRenderer.render(baseImage: image) ?? image
         let representation = NSBitmapImageRep(cgImage: output)
         let nsImage = NSImage(
             cgImage: output,
@@ -47,8 +44,7 @@ enum CaptureOutputService {
     static func save(_ image: CGImage) -> Bool {
         save(
             image,
-            decorates: true,
-            panelTitle: "保存截图",
+            panelTitle: "保存分享图",
             filenamePrefix: "PinSnip"
         )
     }
@@ -57,15 +53,13 @@ enum CaptureOutputService {
     static func saveScrollingCapture(_ image: CGImage) -> Bool {
         save(
             image,
-            decorates: false,
-            panelTitle: "保存滚动截屏",
+            panelTitle: "保存分享长图",
             filenamePrefix: "PinSnip 长截图"
         )
     }
 
     private static func save(
         _ image: CGImage,
-        decorates: Bool,
         panelTitle: String,
         filenamePrefix: String
     ) -> Bool {
@@ -76,9 +70,7 @@ enum CaptureOutputService {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
-        let output = decorates
-            ? ShareCardRenderer.render(baseImage: image) ?? image
-            : image
+        let output = ShareCardRenderer.render(baseImage: image) ?? image
         let representation = NSBitmapImageRep(cgImage: output)
         guard let data = representation.representation(using: .png, properties: [:]) else {
             NSSound.beep()
@@ -98,7 +90,7 @@ enum CaptureOutputService {
     @discardableResult
     static func saveGIF(_ data: Data) -> Bool {
         let panel = NSSavePanel()
-        panel.title = "保存动图"
+        panel.title = "保存分享动图"
         panel.nameFieldStringValue = defaultFilename(fileExtension: "gif")
         panel.allowedContentTypes = [.gif]
         panel.canCreateDirectories = true

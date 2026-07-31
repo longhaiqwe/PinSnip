@@ -22,61 +22,60 @@ final class ScrollingCapturePanelController: NSWindowController {
         mode: ScrollingCaptureMode
     ) {
         self.mode = mode
-        statusLabel = NSTextField(
-            labelWithString: "正在准备滚动截屏…"
-        )
-        statusLabel.font = .systemFont(ofSize: 13, weight: .medium)
+        statusLabel = NSTextField(labelWithString: "准备滚动截屏…")
+        statusLabel.font = .systemFont(ofSize: 12.5, weight: .medium)
         statusLabel.textColor = .labelColor
-        cancelButton = NSButton(title: "取消", target: nil, action: nil)
-        saveButton = NSButton(title: "保存…", target: nil, action: nil)
-        pinButton = NSButton(title: "贴图", target: nil, action: nil)
-        copyButton = NSButton(title: "完成并复制", target: nil, action: nil)
+        statusLabel.lineBreakMode = .byTruncatingMiddle
+        statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        cancelButton = Self.iconButton(symbol: "xmark", help: "取消滚动截屏")
+        cancelButton.keyEquivalent = "\u{1b}"
+        saveButton = Self.actionButton(
+            title: "保存",
+            symbol: "square.and.arrow.down",
+            help: "保存分享长图…"
+        )
+        pinButton = Self.actionButton(
+            title: "贴图",
+            symbol: "pin",
+            help: "贴原始长图到屏幕"
+        )
+        copyButton = Self.actionButton(
+            title: "完成",
+            symbol: "checkmark",
+            help: "完成并复制分享长图"
+        )
+        copyButton.bezelColor = .controlAccentColor
+        copyButton.contentTintColor = .white
         copyButton.keyEquivalent = "\r"
         borderController = GIFRecordingBorderController(
             screen: screen,
             selectionRect: selectionRect
         )
 
-        let buttons = [cancelButton, saveButton, pinButton, copyButton]
-        buttons.forEach { $0.bezelStyle = .rounded }
-        let horizontalPadding: CGFloat = 12
-        let spacing: CGFloat = 10
-        let contentWidth = ceil(
-            statusLabel.intrinsicContentSize.width
-                + buttons.reduce(0) { $0 + $1.intrinsicContentSize.width }
-                + spacing * CGFloat(buttons.count)
-                + horizontalPadding * 2
-        )
-        let size = NSSize(width: max(560, contentWidth), height: 48)
         let globalSelection = selectionRect.offsetBy(
             dx: screen.frame.minX,
             dy: screen.frame.minY
         )
-        var origin = NSPoint(
-            x: min(
-                max(screen.visibleFrame.minX, globalSelection.minX),
-                screen.visibleFrame.maxX - size.width
-            ),
-            y: globalSelection.maxY + 10
+        let panelFrame = ScrollingCapturePanelLayout.panelFrame(
+            visibleFrame: screen.visibleFrame,
+            selectionFrame: globalSelection
         )
-        if origin.y + size.height > screen.visibleFrame.maxY {
-            origin.y = max(
-                screen.visibleFrame.minY,
-                globalSelection.minY - size.height - 10
-            )
-        }
 
         let panel = NSPanel(
-            contentRect: NSRect(origin: origin, size: size),
-            styleMask: [.titled, .utilityWindow],
+            contentRect: panelFrame,
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
-        panel.title = "PinSnip 滚动截屏"
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.isMovableByWindowBackground = true
         super.init(window: panel)
         applyControlState(.preparing)
 
@@ -89,18 +88,62 @@ final class ScrollingCapturePanelController: NSWindowController {
         copyButton.target = self
         copyButton.action = #selector(copyImage)
 
-        let content = NSView(frame: NSRect(origin: .zero, size: size))
-        let stack = NSStackView(
-            views: [statusLabel, cancelButton, saveButton, pinButton, copyButton]
+        let effectView = NSVisualEffectView(frame: NSRect(
+            origin: .zero,
+            size: ScrollingCapturePanelLayout.contentSize
+        ))
+        effectView.material = .hudWindow
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        effectView.wantsLayer = true
+        effectView.layer?.cornerRadius = ScrollingCapturePanelLayout.cornerRadius
+        effectView.layer?.masksToBounds = true
+        effectView.layer?.borderWidth = 0.5
+        effectView.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.5).cgColor
+
+        let statusImage = NSImageView(image: NSImage(
+            systemSymbolName: "rectangle.stack.fill",
+            accessibilityDescription: "滚动截屏"
+        )!)
+        statusImage.contentTintColor = .systemCyan
+        statusImage.symbolConfiguration = NSImage.SymbolConfiguration(
+            pointSize: 13,
+            weight: .semibold
         )
-        stack.orientation = .horizontal
-        stack.alignment = .centerY
-        stack.distribution = .fill
-        stack.spacing = spacing
-        stack.frame = content.bounds.insetBy(dx: horizontalPadding, dy: 8)
-        stack.autoresizingMask = [.width, .height]
-        content.addSubview(stack)
-        panel.contentView = content
+        statusImage.setContentHuggingPriority(.required, for: .horizontal)
+
+        let statusStack = NSStackView(views: [statusImage, statusLabel])
+        statusStack.orientation = .horizontal
+        statusStack.alignment = .centerY
+        statusStack.spacing = 7
+        statusStack.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.setContentHuggingPriority(.required, for: .horizontal)
+        separator.widthAnchor.constraint(equalToConstant: 1).isActive = true
+
+        let actionsStack = NSStackView(
+            views: [cancelButton, saveButton, pinButton, copyButton]
+        )
+        actionsStack.orientation = .horizontal
+        actionsStack.alignment = .centerY
+        actionsStack.spacing = 6
+        actionsStack.setContentHuggingPriority(.required, for: .horizontal)
+
+        let rootStack = NSStackView(views: [statusStack, separator, actionsStack])
+        rootStack.orientation = .horizontal
+        rootStack.alignment = .centerY
+        rootStack.spacing = 10
+        rootStack.translatesAutoresizingMaskIntoConstraints = false
+        effectView.addSubview(rootStack)
+        NSLayoutConstraint.activate([
+            rootStack.leadingAnchor.constraint(equalTo: effectView.leadingAnchor, constant: 13),
+            rootStack.trailingAnchor.constraint(equalTo: effectView.trailingAnchor, constant: -10),
+            rootStack.centerYAnchor.constraint(equalTo: effectView.centerYAnchor),
+            cancelButton.widthAnchor.constraint(equalToConstant: 28),
+        ])
+        panel.contentView = effectView
     }
 
     @available(*, unavailable)
@@ -113,13 +156,16 @@ final class ScrollingCapturePanelController: NSWindowController {
 
     func update(frameCount: Int, pixelHeight: Int) {
         applyControlState(.capturing)
-        let prefix = mode == .automatic ? "自动滚动中" : "请继续滚动页面"
-        statusLabel.stringValue = "\(prefix) · 已拼接 \(frameCount) 屏 / \(pixelHeight) px"
+        statusLabel.stringValue = ScrollingCapturePanelLayout.progressText(
+            isAutomatic: mode == .automatic,
+            frameCount: frameCount,
+            pixelHeight: pixelHeight
+        )
     }
 
     func showExporting() {
         borderController.dismiss()
-        statusLabel.stringValue = "正在生成长截图…"
+        statusLabel.stringValue = "正在生成分享长图…"
         applyControlState(.exporting)
     }
 
@@ -159,5 +205,37 @@ final class ScrollingCapturePanelController: NSWindowController {
         saveButton.isEnabled = state.allowsOutput
         pinButton.isEnabled = state.allowsOutput
         copyButton.isEnabled = state.allowsOutput
+    }
+
+    private static func iconButton(symbol: String, help: String) -> NSButton {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: help
+        )
+        button.imagePosition = .imageOnly
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
+    }
+
+    private static func actionButton(
+        title: String,
+        symbol: String,
+        help: String
+    ) -> NSButton {
+        let button = NSButton(title: title, target: nil, action: nil)
+        button.image = NSImage(
+            systemSymbolName: symbol,
+            accessibilityDescription: help
+        )
+        button.imagePosition = .imageLeading
+        button.bezelStyle = .rounded
+        button.controlSize = .small
+        button.toolTip = help
+        button.setAccessibilityLabel(help)
+        return button
     }
 }

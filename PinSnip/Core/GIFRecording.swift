@@ -89,7 +89,7 @@ public enum AnimatedGIFEncoder {
         loopCount: Int = 0,
         frameProvider: (Int) -> AnimatedImage.Frame?
     ) -> Data? {
-        encode(
+        encodeShareCard(
             frameCount: frameCount,
             loopCount: loopCount,
             frameProvider: frameProvider

@@ -37,9 +37,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             case .capture: self?.router.perform(.capture)
             case .recording: self?.router.perform(.recordAnimatedGIF)
             case .paste: self?.router.perform(.paste)
+            case .cancelActiveCapture: self?.captureCoordinator.cancelActiveCapture()
             }
         }
         hotKeyCenter = hotKeys
+        captureCoordinator.onCaptureCancellationAvailabilityChanged = {
+            [weak self] isAvailable in
+            self?.hotKeyCenter?.setCaptureCancellationEnabled(isAvailable)
+        }
         if !hotKeys.register(hotKeySettings) {
             showHotKeyWarning(for: hotKeySettings)
         }

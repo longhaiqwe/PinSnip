@@ -25,12 +25,16 @@ final class CaptureCoordinator {
     private var isPreparingGIFRecording = false
     private var lastCaptureRegion: LastCaptureRegion?
     private var gifRecorder: ScreenGIFRecorder?
+    private var gifPreparationTask: Task<Void, Never>?
     private var gifRecordingPanel: GIFRecordingPanelController?
     private var isPreparingScrollingCapture = false
     private var scrollingCapture: ScreenScrollingCapture?
+    private var scrollingPreparationTask: Task<Void, Never>?
     private var scrollingCapturePanel: ScrollingCapturePanelController?
     private var captureHistory = CaptureHistory<Data>(limit: 10)
     private var historyPasteboardChangeCount: Int?
+
+    var onCaptureCancellationAvailabilityChanged: ((Bool) -> Void)?
 
     init(
         pinManager: PinWindowManager,
@@ -264,9 +268,14 @@ final class CaptureCoordinator {
         isPreparingGIFRecording = true
         let recorder = ScreenGIFRecorder()
         gifRecorder = recorder
-        Task {
+        onCaptureCancellationAvailabilityChanged?(true)
+        gifPreparationTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(180))
+                guard !Task.isCancelled,
+                      let self,
+                      self.gifRecorder === recorder
+                else { return }
                 try await recorder.start(
                     screen: screen,
                     selectionRect: selectionRect,
@@ -274,27 +283,43 @@ final class CaptureCoordinator {
                         self?.stopGIFRecording(action: .copy)
                     }
                 )
-                isPreparingGIFRecording = false
+                guard !Task.isCancelled, self.gifRecorder === recorder else {
+                    recorder.cancel()
+                    return
+                }
+                self.gifPreparationTask = nil
+                self.isPreparingGIFRecording = false
                 let panel = GIFRecordingPanelController(
                     screen: screen,
                     selectionRect: selectionRect
                 )
+                panel.onCancel = { [weak self] in
+                    self?.cancelGIFRecording()
+                }
                 panel.onStop = { [weak self] action in
                     self?.stopGIFRecording(action: action)
                 }
-                gifRecordingPanel = panel
+                self.gifRecordingPanel = panel
                 panel.present()
             } catch {
+                guard let self, self.gifRecorder === recorder else { return }
+                self.gifPreparationTask = nil
                 recorder.cancel()
-                gifRecorder = nil
-                isPreparingGIFRecording = false
-                presentCaptureError(error)
+                self.gifRecorder = nil
+                self.isPreparingGIFRecording = false
+                self.onCaptureCancellationAvailabilityChanged?(false)
+                if !(error is CancellationError) {
+                    self.presentCaptureError(error)
+                }
             }
         }
     }
 
     private func stopGIFRecording(action: GIFRecordingOutputAction) {
         guard let recorder = gifRecorder else { return }
+        gifPreparationTask?.cancel()
+        gifPreparationTask = nil
+        onCaptureCancellationAvailabilityChanged?(false)
         let completionPlan = GIFRecordingCompletionPlan(action: action)
         gifRecordingPanel?.showExporting()
         Task {
@@ -325,6 +350,7 @@ final class CaptureCoordinator {
         let mode: ScrollingCaptureMode = AXIsProcessTrusted() ? .automatic : .manual
         let capture = ScreenScrollingCapture()
         scrollingCapture = capture
+        onCaptureCancellationAvailabilityChanged?(true)
         let panel = ScrollingCapturePanelController(
             screen: screen,
             selectionRect: selectionRect,
@@ -339,10 +365,13 @@ final class CaptureCoordinator {
         scrollingCapturePanel = panel
         panel.present()
 
-        Task {
+        scrollingPreparationTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(180))
-                guard scrollingCapture === capture else { return }
+                guard !Task.isCancelled,
+                      let self,
+                      self.scrollingCapture === capture
+                else { return }
                 try await capture.start(
                     screen: screen,
                     selectionRect: selectionRect,
@@ -361,21 +390,29 @@ final class CaptureCoordinator {
                     capture.cancel()
                     return
                 }
-                isPreparingScrollingCapture = false
+                self.scrollingPreparationTask = nil
+                self.isPreparingScrollingCapture = false
             } catch {
-                guard scrollingCapture === capture else { return }
+                guard let self, self.scrollingCapture === capture else { return }
+                self.scrollingPreparationTask = nil
                 capture.cancel()
-                scrollingCapture = nil
-                scrollingCapturePanel?.finish()
-                scrollingCapturePanel = nil
-                isPreparingScrollingCapture = false
-                presentCaptureError(error)
+                self.scrollingCapture = nil
+                self.scrollingCapturePanel?.finish()
+                self.scrollingCapturePanel = nil
+                self.isPreparingScrollingCapture = false
+                self.onCaptureCancellationAvailabilityChanged?(false)
+                if !(error is CancellationError) {
+                    self.presentCaptureError(error)
+                }
             }
         }
     }
 
     private func stopScrollingCapture(action: ScrollingCaptureOutputAction) {
         guard let capture = scrollingCapture else { return }
+        scrollingPreparationTask?.cancel()
+        scrollingPreparationTask = nil
+        onCaptureCancellationAvailabilityChanged?(false)
         scrollingCapture = nil
         scrollingCapturePanel?.showExporting()
         Task {
@@ -433,11 +470,35 @@ final class CaptureCoordinator {
     }
 
     private func cancelScrollingCapture() {
+        scrollingPreparationTask?.cancel()
+        scrollingPreparationTask = nil
         scrollingCapture?.cancel()
         scrollingCapture = nil
         scrollingCapturePanel?.finish()
         scrollingCapturePanel = nil
         isPreparingScrollingCapture = false
+        onCaptureCancellationAvailabilityChanged?(false)
+    }
+
+    private func cancelGIFRecording() {
+        gifPreparationTask?.cancel()
+        gifPreparationTask = nil
+        gifRecorder?.cancel()
+        gifRecorder = nil
+        gifRecordingPanel?.finish()
+        gifRecordingPanel = nil
+        isPreparingGIFRecording = false
+        onCaptureCancellationAvailabilityChanged?(false)
+    }
+
+    func cancelActiveCapture() {
+        if gifRecorder != nil || isPreparingGIFRecording {
+            cancelGIFRecording()
+            return
+        }
+        if scrollingCapture != nil || isPreparingScrollingCapture {
+            cancelScrollingCapture()
+        }
     }
 
     private func cancel() {
