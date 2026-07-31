@@ -10,12 +10,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updaterDelegate: nil,
         userDriverDelegate: self
     )
-    private lazy var captureCoordinator = CaptureCoordinator(pinManager: pinManager)
+    private lazy var captureCoordinator = CaptureCoordinator(
+        pinManager: pinManager,
+        shareStyle: shareStyle
+    )
     private lazy var router = AppCommandRouter { [weak self] command in
         self?.perform(command)
     }
     private let hotKeySettingsStore = HotKeySettingsStore()
     private var hotKeySettings = HotKeySettings.standard
+    private let shareStyleStore = ShareStyleStore()
+    private var shareStyle = ShareStyle.paperCut
+    private var shareStyleMenuItems: [NSMenuItem] = []
     private var hotKeyCenter: GlobalHotKeyCenter?
     private var hotKeySettingsWindowController: HotKeySettingsWindowController?
     private var statusItem: NSStatusItem?
@@ -28,8 +34,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        captureCoordinator.prewarmCaptureAnalysis()
         hotKeySettings = hotKeySettingsStore.load()
+        shareStyle = shareStyleStore.load()
+        captureCoordinator.prewarmCaptureAnalysis()
         configureStatusItem()
         updaterController.startUpdater()
         let hotKeys = GlobalHotKeyCenter { [weak self] identifier in
@@ -69,6 +76,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         router.perform(.toggleAutomaticUpdateDownloads)
     }
     @objc private func restoreInteraction() { pinManager.makeAllInteractive() }
+    @objc private func selectShareStyle(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String,
+              let style = ShareStyle(rawValue: rawValue)
+        else { return }
+        shareStyle = style
+        shareStyleStore.save(style)
+        captureCoordinator.updateShareStyle(style)
+        updateShareStyleMenuState()
+    }
     @objc private func showHotKeySettings() {
         if let hotKeySettingsWindowController, hotKeySettingsWindowController.window?.isVisible == true {
             hotKeySettingsWindowController.showWindow(nil)
@@ -138,6 +154,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(recordingItem)
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
+        let shareStyleMenu = NSMenu()
+        shareStyleMenuItems = ShareStyle.allCases.map { style in
+            let item = menuItem(style.title, action: #selector(selectShareStyle(_:)))
+            item.representedObject = style.rawValue
+            shareStyleMenu.addItem(item)
+            return item
+        }
+        let shareStyleItem = NSMenuItem(title: "图片样式", action: nil, keyEquivalent: "")
+        shareStyleItem.submenu = shareStyleMenu
+        menu.addItem(shareStyleItem)
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
         menu.addItem(.separator())
         let checkForUpdatesItem = menuItem("检查更新…", action: #selector(checkForUpdates))
@@ -164,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         item.menu = menu
         statusItem = item
         updateHotKeyMenuTitles()
+        updateShareStyleMenuState()
         updateUpdateMenuState()
     }
 
@@ -194,6 +221,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         captureMenuItem?.title = "截图（\(hotKeySettings.capture.displayName)）"
         recordingMenuItem?.title = "录制动图…（\(hotKeySettings.recording.displayName)）"
         pasteMenuItem?.title = "剪贴板贴图（\(hotKeySettings.paste.displayName)）"
+    }
+
+    private func updateShareStyleMenuState() {
+        for item in shareStyleMenuItems {
+            item.state = item.representedObject as? String == shareStyle.rawValue ? .on : .off
+        }
     }
 
     private func updateUpdateMenuState() {

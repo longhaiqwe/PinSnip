@@ -4,26 +4,37 @@ import UniformTypeIdentifiers
 
 @MainActor
 enum CaptureOutputService {
-    static func copy(_ image: CGImage, to pasteboard: NSPasteboard = .general) {
-        writeImage(image, to: pasteboard)
+    @discardableResult
+    static func copy(
+        _ image: CGImage,
+        style: ShareStyle,
+        to pasteboard: NSPasteboard = .general
+    ) -> CGImage {
+        copyRendered(render(image, style: style), to: pasteboard)
     }
 
+    @discardableResult
     static func copyScrollingCapture(
         _ image: CGImage,
+        style: ShareStyle,
         to pasteboard: NSPasteboard = .general
-    ) {
-        writeImage(image, to: pasteboard)
+    ) -> CGImage {
+        copyRendered(render(image, style: style), to: pasteboard)
     }
 
-    private static func writeImage(
+    static func render(_ image: CGImage, style: ShareStyle) -> CGImage {
+        ShareCardRenderer.render(baseImage: image, style: style) ?? image
+    }
+
+    @discardableResult
+    static func copyRendered(
         _ image: CGImage,
-        to pasteboard: NSPasteboard
-    ) {
-        let output = ShareCardRenderer.render(baseImage: image) ?? image
-        let representation = NSBitmapImageRep(cgImage: output)
+        to pasteboard: NSPasteboard = .general
+    ) -> CGImage {
+        let representation = NSBitmapImageRep(cgImage: image)
         let nsImage = NSImage(
-            cgImage: output,
-            size: NSSize(width: output.width, height: output.height)
+            cgImage: image,
+            size: NSSize(width: image.width, height: image.height)
         )
         pasteboard.clearContents()
         if let png = representation.representation(using: .png, properties: [:]) {
@@ -32,6 +43,7 @@ enum CaptureOutputService {
         if let tiff = nsImage.tiffRepresentation {
             pasteboard.setData(tiff, forType: .tiff)
         }
+        return image
     }
 
     static func copyGIF(_ data: Data, to pasteboard: NSPasteboard = .general) {
@@ -41,24 +53,35 @@ enum CaptureOutputService {
     }
 
     @discardableResult
-    static func save(_ image: CGImage) -> Bool {
-        save(
-            image,
+    static func save(_ image: CGImage, style: ShareStyle) -> CGImage? {
+        let output = render(image, style: style)
+        return saveRendered(
+            output,
             panelTitle: "保存分享图",
+            filenamePrefix: "PinSnip"
+        ) ? output : nil
+    }
+
+    @discardableResult
+    static func saveScrollingCapture(_ image: CGImage, style: ShareStyle) -> CGImage? {
+        let output = render(image, style: style)
+        return saveRendered(
+            output,
+            panelTitle: "保存分享长图",
+            filenamePrefix: "PinSnip 长截图"
+        ) ? output : nil
+    }
+
+    @discardableResult
+    static func saveRendered(_ image: CGImage) -> Bool {
+        saveRendered(
+            image,
+            panelTitle: "保存图片",
             filenamePrefix: "PinSnip"
         )
     }
 
-    @discardableResult
-    static func saveScrollingCapture(_ image: CGImage) -> Bool {
-        save(
-            image,
-            panelTitle: "保存分享长图",
-            filenamePrefix: "PinSnip 长截图"
-        )
-    }
-
-    private static func save(
+    private static func saveRendered(
         _ image: CGImage,
         panelTitle: String,
         filenamePrefix: String
@@ -70,8 +93,7 @@ enum CaptureOutputService {
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return false }
 
-        let output = ShareCardRenderer.render(baseImage: image) ?? image
-        let representation = NSBitmapImageRep(cgImage: output)
+        let representation = NSBitmapImageRep(cgImage: image)
         guard let data = representation.representation(using: .png, properties: [:]) else {
             NSSound.beep()
             return false

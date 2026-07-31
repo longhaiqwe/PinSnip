@@ -54,6 +54,36 @@ final class GIFRecordingTests: XCTestCase {
         XCTAssertGreaterThan(decoded.pixelHeight, 3)
     }
 
+    func testRecordingEncodingCanKeepOriginalFrames() throws {
+        let frames = [
+            AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),
+            AnimatedImage.Frame(image: try solidImage(red: 0, blue: 1), duration: 0.16)
+        ]
+
+        let data = try XCTUnwrap(
+            AnimatedGIFEncoder.encodeRecording(frames: frames, style: .original)
+        )
+        let decoded = try XCTUnwrap(AnimatedImage(data: data))
+
+        XCTAssertEqual(decoded.pixelWidth, 4)
+        XCTAssertEqual(decoded.pixelHeight, 3)
+    }
+
+    func testRecordingEncodingCanUseBorderedFrames() throws {
+        let frames = [
+            AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),
+            AnimatedImage.Frame(image: try solidImage(red: 0, blue: 1), duration: 0.16)
+        ]
+
+        let data = try XCTUnwrap(
+            AnimatedGIFEncoder.encodeRecording(frames: frames, style: .bordered)
+        )
+        let decoded = try XCTUnwrap(AnimatedImage(data: data))
+
+        XCTAssertGreaterThan(decoded.pixelWidth, 4)
+        XCTAssertGreaterThan(decoded.pixelHeight, 3)
+    }
+
     func testCopyCompletionOnlyWritesTheGIFToTheClipboard() {
         XCTAssertEqual(
             GIFRecordingCompletionPlan(action: .copy),
@@ -74,7 +104,7 @@ final class GIFRecordingTests: XCTestCase {
         )
     }
 
-    func testShareCardEncodingAddsStableBorderAndPreservesAnimation() throws {
+    func testShareCardEncodingUsesStablePaperCanvasAndPreservesAnimation() throws {
         let frames = [
             AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),
             AnimatedImage.Frame(image: try solidImage(red: 0, blue: 1), duration: 0.16)

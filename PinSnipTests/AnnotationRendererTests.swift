@@ -3,54 +3,104 @@ import XCTest
 @testable import PinSnipCore
 
 final class AnnotationRendererTests: XCTestCase {
-    func testShareCardAddsOpaquePaddingAroundScreenshot() throws {
+    func testOriginalShareStyleReturnsTheUnmodifiedScreenshot() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 12, green: 130, blue: 220))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base, style: .original))
+
+        XCTAssertEqual(rendered.width, 80)
+        XCTAssertEqual(rendered.height, 60)
+        let corner = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertEqual(corner.red, 12)
+        XCTAssertEqual(corner.green, 130)
+        XCTAssertEqual(corner.blue, 220)
+        XCTAssertEqual(corner.alpha, 255)
+    }
+
+    func testBorderedShareStyleUsesAnOpaqueCanvas() throws {
         let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
 
-        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base, style: .bordered))
 
         XCTAssertEqual(rendered.width, 128)
         XCTAssertEqual(rendered.height, 108)
-        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
-        XCTAssertEqual(background.alpha, 255)
+        let canvasCorner = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertEqual(canvasCorner.alpha, 255)
+        let center = try XCTUnwrap(pixel(in: rendered, x: 64, y: 54))
+        XCTAssertEqual(center.red, 240, accuracy: 2)
+        XCTAssertEqual(center.green, 80, accuracy: 2)
+        XCTAssertEqual(center.blue, 40, accuracy: 2)
     }
 
-    func testShareCardBackgroundFollowsScreenshotDominantColor() throws {
+    func testShareCardLeavesCanvasTransparentOutsidePaperCutout() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base, style: .paperCut))
+
+        XCTAssertEqual(rendered.width, 128)
+        XCTAssertEqual(rendered.height, 108)
+        let outsidePaper = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
+        XCTAssertEqual(outsidePaper.alpha, 0)
+    }
+
+    func testShareCardUsesScreenshotDominantColorForBackPaper() throws {
         let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
 
         let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
 
-        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
-        XCTAssertGreaterThan(Int(background.red), Int(background.blue) + 60)
+        let backPaper = try XCTUnwrap(pixel(in: rendered, x: 110, y: 54))
+        XCTAssertEqual(backPaper.alpha, 255)
+        XCTAssertGreaterThan(Int(backPaper.red), Int(backPaper.blue) + 25)
     }
 
-    func testShareCardBackgroundUsesSparseAccentFromLightScreenshot() throws {
+    func testShareCardBackPaperUsesSparseAccentFromLightScreenshot() throws {
         let base = try XCTUnwrap(makeLightImageWithRedAccents(width: 200, height: 120))
 
         let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
 
-        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
-        XCTAssertGreaterThan(Int(background.red), Int(background.blue) + 30)
+        let backPaper = try XCTUnwrap(pixel(in: rendered, x: 230, y: 84))
+        XCTAssertGreaterThan(Int(backPaper.red), Int(backPaper.blue) + 30)
     }
 
-    func testShareCardBackgroundPreservesMutedBlueAccent() throws {
+    func testShareCardBackPaperPreservesMutedBlueAccent() throws {
         let base = try XCTUnwrap(makeLightImageWithMutedBlueAccents(width: 200, height: 120))
 
         let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
 
-        let background = try XCTUnwrap(pixel(in: rendered, x: 4, y: 4))
-        XCTAssertGreaterThanOrEqual(Int(background.blue) - Int(background.red), 25)
+        let backPaper = try XCTUnwrap(pixel(in: rendered, x: 230, y: 84))
+        XCTAssertGreaterThanOrEqual(Int(backPaper.blue) - Int(backPaper.red), 25)
     }
 
-    func testShareCardShadowKeepsNearbyBackgroundLight() throws {
+    func testShareCardUsesStableWarmBackPaperForNeutralScreenshot() throws {
         let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, gray: 1))
 
         let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
 
-        let clearBackground = try XCTUnwrap(pixel(in: rendered, x: 64, y: 12))
-        let shadowBackground = try XCTUnwrap(pixel(in: rendered, x: 64, y: 20))
-        let clearBrightness = Int(clearBackground.red) + Int(clearBackground.green) + Int(clearBackground.blue)
-        let shadowBrightness = Int(shadowBackground.red) + Int(shadowBackground.green) + Int(shadowBackground.blue)
-        XCTAssertLessThan(abs(clearBrightness - shadowBrightness), 20)
+        let backPaper = try XCTUnwrap(pixel(in: rendered, x: 110, y: 54))
+        XCTAssertEqual(backPaper.alpha, 255)
+        XCTAssertGreaterThan(Int(backPaper.red), Int(backPaper.blue) + 25)
+    }
+
+    func testShareCardKeepsLightPaperLayerBehindScreenshot() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let lightPaper = try XCTUnwrap(pixel(in: rendered, x: 64, y: 18))
+        let brightness = Int(lightPaper.red) + Int(lightPaper.green) + Int(lightPaper.blue)
+        XCTAssertEqual(lightPaper.alpha, 255)
+        XCTAssertGreaterThan(brightness, 500)
+    }
+
+    func testShareCardDoesNotAddWhiteBorderAlongScreenshotEdge() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 240, green: 80, blue: 40))
+
+        let rendered = try XCTUnwrap(ShareCardRenderer.render(baseImage: base))
+
+        let screenshotEdge = try XCTUnwrap(pixel(in: rendered, x: 64, y: 24))
+        XCTAssertEqual(screenshotEdge.red, 240, accuracy: 4)
+        XCTAssertEqual(screenshotEdge.green, 80, accuracy: 4)
+        XCTAssertEqual(screenshotEdge.blue, 40, accuracy: 4)
     }
 
     func testShareCardKeepsScreenshotCenterColor() throws {

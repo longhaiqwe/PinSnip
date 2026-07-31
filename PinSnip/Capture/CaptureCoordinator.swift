@@ -16,6 +16,7 @@ final class CaptureCoordinator {
     private let visualRegionDetector = VisualRegionDetector()
     private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
+    private var shareStyle: ShareStyle
     private var overlay: SelectionOverlayController?
     private var captureSessionState = CaptureSessionState()
     private var captureTask: Task<Void, Never>?
@@ -38,12 +39,18 @@ final class CaptureCoordinator {
 
     init(
         pinManager: PinWindowManager,
+        shareStyle: ShareStyle = .paperCut,
         permissionGate: ScreenCapturePermissionGate = ScreenCapturePermissionGate(
             provider: SystemScreenCapturePermissionProvider()
         )
     ) {
         self.pinManager = pinManager
+        self.shareStyle = shareStyle
         self.permissionGate = permissionGate
+    }
+
+    func updateShareStyle(_ style: ShareStyle) {
+        shareStyle = style
     }
 
     func prewarmCaptureAnalysis() {
@@ -255,13 +262,20 @@ final class CaptureCoordinator {
         }
         dismissOverlay()
         switch action {
-        case .copy: CaptureOutputService.copy(image)
-        case .save: CaptureOutputService.save(image)
-        case .pin: pinManager.pin(image)
+        case .copy:
+            let copiedImage = CaptureOutputService.copy(image, style: shareStyle)
+            rememberCapturedScreenshot(copiedImage)
+        case .save:
+            if let savedImage = CaptureOutputService.save(image, style: shareStyle) {
+                rememberCapturedScreenshot(savedImage)
+            }
+        case .pin:
+            let pinnedImage = CaptureOutputService.render(image, style: shareStyle)
+            pinManager.pin(pinnedImage)
+            rememberCapturedScreenshot(pinnedImage)
         case .recordGIF: break
         case .scrollCapture: break
         }
-        rememberCapturedScreenshot(image)
     }
 
     private func beginGIFRecording(screen: NSScreen, selectionRect: CGRect) {
@@ -323,7 +337,7 @@ final class CaptureCoordinator {
         let completionPlan = GIFRecordingCompletionPlan(action: action)
         gifRecordingPanel?.showExporting()
         Task {
-            let data = await recorder.stop()
+            let data = await recorder.stop(style: shareStyle)
             gifRecordingPanel?.finish()
             gifRecordingPanel = nil
             gifRecorder = nil
@@ -427,13 +441,17 @@ final class CaptureCoordinator {
             }
             switch action {
             case .copy:
-                CaptureOutputService.copyScrollingCapture(image)
+                let copiedImage = CaptureOutputService.copyScrollingCapture(image, style: shareStyle)
+                rememberCapturedScreenshot(copiedImage)
             case .save:
-                _ = CaptureOutputService.saveScrollingCapture(image)
+                if let savedImage = CaptureOutputService.saveScrollingCapture(image, style: shareStyle) {
+                    rememberCapturedScreenshot(savedImage)
+                }
             case .pin:
-                pinManager.pin(image)
+                let pinnedImage = CaptureOutputService.render(image, style: shareStyle)
+                pinManager.pin(pinnedImage)
+                rememberCapturedScreenshot(pinnedImage)
             }
-            rememberCapturedScreenshot(image)
         }
     }
 

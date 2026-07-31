@@ -112,11 +112,11 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func copyImage() {
-        CaptureOutputService.copy(image)
+        CaptureOutputService.copyRendered(image)
     }
 
     @objc private func saveImage() {
-        CaptureOutputService.save(image)
+        CaptureOutputService.saveRendered(image)
     }
 
     @objc private func closePin() {
