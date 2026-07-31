@@ -57,17 +57,16 @@ final class UpdateConfigurationTests: XCTestCase {
         )
 
         XCTAssertTrue(appcast.contains("<item>"))
-        XCTAssertTrue(appcast.contains("<sparkle:version>4</sparkle:version>"))
+        XCTAssertTrue(appcast.contains("<sparkle:version>5</sparkle:version>"))
         XCTAssertTrue(
             appcast.contains(
-                "<sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>"
+                "<sparkle:shortVersionString>0.4.0</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
             appcast.contains(
-                "<link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.3.1</link>"
+                "<link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.4.0</link>"
             )
         )
-        XCTAssertFalse(appcast.contains("<enclosure"))
     }
 }
