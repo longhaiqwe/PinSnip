@@ -46,6 +46,11 @@ final class ScreenScrollingCapture {
 
         let ownProcessID = ProcessInfo.processInfo.processIdentifier
         let ownApplications = content.applications.filter { $0.processID == ownProcessID }
+        guard ScrollingCaptureExclusionPolicy.canStartCapture(
+            ownApplicationCount: ownApplications.count
+        ) else {
+            throw ScreenCaptureError.displayUnavailable
+        }
         let filter = SCContentFilter(
             display: display,
             excludingApplications: ownApplications,

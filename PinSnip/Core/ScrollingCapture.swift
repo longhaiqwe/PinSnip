@@ -51,6 +51,26 @@ public enum ScrollingFrameAnalysis: Equatable, Sendable {
     case unmatched
 }
 
+public enum ScrollingCaptureExclusionPolicy {
+    public static func canStartCapture(ownApplicationCount: Int) -> Bool {
+        ownApplicationCount > 0
+    }
+}
+
+public enum ScrollingCaptureControlState: Equatable, Sendable {
+    case preparing
+    case capturing
+    case exporting
+
+    public var allowsCancellation: Bool {
+        self != .exporting
+    }
+
+    public var allowsOutput: Bool {
+        self == .capturing
+    }
+}
+
 public enum ScrollingFrameAnalyzer {
     private static let unchangedThreshold = 0.004
     private static let matchedThreshold = 0.08

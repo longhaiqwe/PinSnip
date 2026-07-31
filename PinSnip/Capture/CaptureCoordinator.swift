@@ -325,9 +325,24 @@ final class CaptureCoordinator {
         let mode: ScrollingCaptureMode = AXIsProcessTrusted() ? .automatic : .manual
         let capture = ScreenScrollingCapture()
         scrollingCapture = capture
+        let panel = ScrollingCapturePanelController(
+            screen: screen,
+            selectionRect: selectionRect,
+            mode: mode
+        )
+        panel.onCancel = { [weak self] in
+            self?.cancelScrollingCapture()
+        }
+        panel.onStop = { [weak self] action in
+            self?.stopScrollingCapture(action: action)
+        }
+        scrollingCapturePanel = panel
+        panel.present()
+
         Task {
             do {
                 try await Task.sleep(for: .milliseconds(180))
+                guard scrollingCapture === capture else { return }
                 try await capture.start(
                     screen: screen,
                     selectionRect: selectionRect,
@@ -342,23 +357,17 @@ final class CaptureCoordinator {
                         self?.stopScrollingCapture(action: .copy)
                     }
                 )
+                guard scrollingCapture === capture else {
+                    capture.cancel()
+                    return
+                }
                 isPreparingScrollingCapture = false
-                let panel = ScrollingCapturePanelController(
-                    screen: screen,
-                    selectionRect: selectionRect,
-                    mode: mode
-                )
-                panel.onCancel = { [weak self] in
-                    self?.cancelScrollingCapture()
-                }
-                panel.onStop = { [weak self] action in
-                    self?.stopScrollingCapture(action: action)
-                }
-                scrollingCapturePanel = panel
-                panel.present()
             } catch {
+                guard scrollingCapture === capture else { return }
                 capture.cancel()
                 scrollingCapture = nil
+                scrollingCapturePanel?.finish()
+                scrollingCapturePanel = nil
                 isPreparingScrollingCapture = false
                 presentCaptureError(error)
             }

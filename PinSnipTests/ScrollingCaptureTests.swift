@@ -2,6 +2,37 @@ import XCTest
 @testable import PinSnipCore
 
 final class ScrollingCaptureTests: XCTestCase {
+    func testPreparingControlsAllowCancellationButNotOutput() {
+        XCTAssertTrue(ScrollingCaptureControlState.preparing.allowsCancellation)
+        XCTAssertFalse(ScrollingCaptureControlState.preparing.allowsOutput)
+    }
+
+    func testCapturingControlsAllowCancellationAndOutput() {
+        XCTAssertTrue(ScrollingCaptureControlState.capturing.allowsCancellation)
+        XCTAssertTrue(ScrollingCaptureControlState.capturing.allowsOutput)
+    }
+
+    func testExportingControlsDisableCancellationAndOutput() {
+        XCTAssertFalse(ScrollingCaptureControlState.exporting.allowsCancellation)
+        XCTAssertFalse(ScrollingCaptureControlState.exporting.allowsOutput)
+    }
+
+    func testDoesNotStartWhenOwnApplicationCannotBeExcluded() {
+        XCTAssertFalse(
+            ScrollingCaptureExclusionPolicy.canStartCapture(
+                ownApplicationCount: 0
+            )
+        )
+    }
+
+    func testStartsWhenOwnApplicationCanBeExcluded() {
+        XCTAssertTrue(
+            ScrollingCaptureExclusionPolicy.canStartCapture(
+                ownApplicationCount: 1
+            )
+        )
+    }
+
     func testDetectsVerticalOffsetBetweenContentFrames() {
         let previous = frame(rows: Array(0..<60))
         let current = frame(rows: Array(20..<80))

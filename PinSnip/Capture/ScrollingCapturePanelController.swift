@@ -1,4 +1,5 @@
 import AppKit
+import PinSnipCore
 
 @MainActor
 final class ScrollingCapturePanelController: NSWindowController {
@@ -10,6 +11,7 @@ final class ScrollingCapturePanelController: NSWindowController {
     private let copyButton: NSButton
     private let borderController: GIFRecordingBorderController
     private var stopRequested = false
+    private var controlState = ScrollingCaptureControlState.preparing
 
     var onCancel: (() -> Void)?
     var onStop: ((ScrollingCaptureOutputAction) -> Void)?
@@ -21,9 +23,7 @@ final class ScrollingCapturePanelController: NSWindowController {
     ) {
         self.mode = mode
         statusLabel = NSTextField(
-            labelWithString: mode == .automatic
-                ? "自动滚动中 · 已拼接 1 屏"
-                : "请在蓝框内滚动页面 · 已拼接 1 屏"
+            labelWithString: "正在准备滚动截屏…"
         )
         statusLabel.font = .systemFont(ofSize: 13, weight: .medium)
         statusLabel.textColor = .labelColor
@@ -78,6 +78,7 @@ final class ScrollingCapturePanelController: NSWindowController {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         super.init(window: panel)
+        applyControlState(.preparing)
 
         cancelButton.target = self
         cancelButton.action = #selector(cancel)
@@ -111,6 +112,7 @@ final class ScrollingCapturePanelController: NSWindowController {
     }
 
     func update(frameCount: Int, pixelHeight: Int) {
+        applyControlState(.capturing)
         let prefix = mode == .automatic ? "自动滚动中" : "请继续滚动页面"
         statusLabel.stringValue = "\(prefix) · 已拼接 \(frameCount) 屏 / \(pixelHeight) px"
     }
@@ -118,10 +120,7 @@ final class ScrollingCapturePanelController: NSWindowController {
     func showExporting() {
         borderController.dismiss()
         statusLabel.stringValue = "正在生成长截图…"
-        cancelButton.isEnabled = false
-        saveButton.isEnabled = false
-        pinButton.isEnabled = false
-        copyButton.isEnabled = false
+        applyControlState(.exporting)
     }
 
     func finish() {
@@ -130,7 +129,7 @@ final class ScrollingCapturePanelController: NSWindowController {
     }
 
     @objc private func cancel() {
-        guard !stopRequested else { return }
+        guard !stopRequested, controlState.allowsCancellation else { return }
         stopRequested = true
         onCancel?()
     }
@@ -148,9 +147,17 @@ final class ScrollingCapturePanelController: NSWindowController {
     }
 
     private func requestStop(action: ScrollingCaptureOutputAction) {
-        guard !stopRequested else { return }
+        guard !stopRequested, controlState.allowsOutput else { return }
         stopRequested = true
         showExporting()
         onStop?(action)
+    }
+
+    private func applyControlState(_ state: ScrollingCaptureControlState) {
+        controlState = state
+        cancelButton.isEnabled = state.allowsCancellation
+        saveButton.isEnabled = state.allowsOutput
+        pinButton.isEnabled = state.allowsOutput
+        copyButton.isEnabled = state.allowsOutput
     }
 }
