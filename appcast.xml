@@ -6,6 +6,27 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.7.1</title>
+            <pubDate>Sat, 01 Aug 2026 09:33:19 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.1</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.1</sparkle:fullReleaseNotesLink>
+            <sparkle:version>9</sparkle:version>
+            <sparkle:shortVersionString>0.7.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.7.1
+
+### 改进
+
+- 将菜单栏“恢复鼠标操作”改名为“关闭贴图鼠标穿透”，更明确地说明该功能的作用。
+- 没有贴图处于鼠标穿透状态时，该菜单项会自动置灰；存在穿透贴图时才可点击。
+
+### 下载
+
+推荐下载 `PinSnip-v0.7.1-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.7.1/PinSnip-v0.7.1-macOS-universal.zip" length="3023611" type="application/octet-stream" sparkle:edSignature="RaleVkSm9XSr5DfhrVvHnalnIrn7OvAx7s1SaWyZydFb6h9OEAmoTCGuAHC7uMi7Jd3k/IS3XuKpxOnQSyKXBw=="/>
+        </item>
+        <item>
             <title>0.7.0</title>
             <pubDate>Fri, 31 Jul 2026 23:26:18 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.0</link>
