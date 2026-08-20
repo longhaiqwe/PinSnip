@@ -6,6 +6,27 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.7.2</title>
+            <pubDate>Thu, 20 Aug 2026 23:32:32 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.2</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.2</sparkle:fullReleaseNotesLink>
+            <sparkle:version>10</sparkle:version>
+            <sparkle:shortVersionString>0.7.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.7.2
+
+### 修复
+
+- 修复自动窗口截图可能被视觉识别的近似边界覆盖，导致选区出现数像素偏移的问题。
+- 当视觉区域与系统窗口几乎重合时，优先使用 macOS 提供的精确窗口边界；真正较小的弹窗和内容区域仍可智能吸附。
+
+### 下载
+
+推荐下载 `PinSnip-v0.7.2-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.7.2/PinSnip-v0.7.2-macOS-universal.zip" length="3024938" type="application/octet-stream" sparkle:edSignature="5+GPMyG06GVFqC14BNezLNv8zkPxgnMOHzyKLaRG4ClW1MkwXay11XFfEjAYeuKFa6v043ZmkJfJNCCQWdkZAw=="/>
+        </item>
+        <item>
             <title>0.7.1</title>
             <pubDate>Sat, 01 Aug 2026 09:33:19 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.1</link>
