@@ -37,6 +37,26 @@ final class WindowCandidateTests: XCTestCase {
         XCTAssertEqual(WindowCandidate.best(at: CGPoint(x: 30, y: 30), in: candidates)?.id, 1)
     }
 
+    func testApplicationWindowWinsOverNearlyIdenticalVisualRegion() {
+        let applicationWindow = WindowCandidate(
+            id: 21_872,
+            frame: CGRect(x: 638, y: 284, width: 980, height: 712),
+            zOrder: 36
+        )
+        let approximateVisualRegion = WindowCandidate(
+            id: .max,
+            frame: CGRect(x: 643, y: 288, width: 966, height: 699),
+            kind: .visualRegion
+        )
+
+        let candidate = WindowCandidate.best(
+            at: CGPoint(x: 900, y: 640),
+            in: [applicationWindow, approximateVisualRegion]
+        )
+
+        XCTAssertEqual(candidate, applicationWindow)
+    }
+
     func testStableCandidatesExcludeWindowThatMovedDuringScreenshotCapture() {
         let before = [
             WindowCandidate(

@@ -24,8 +24,17 @@ public struct WindowCandidate: Equatable, Sendable {
     }
 
     public static func best(at point: CGPoint, in candidates: [WindowCandidate]) -> WindowCandidate? {
-        candidates
-            .filter { $0.frame.contains(point) }
+        let containingCandidates = candidates.filter { $0.frame.contains(point) }
+        let applicationWindows = containingCandidates.filter {
+            $0.kind == .applicationWindow
+        }
+        return containingCandidates
+            .filter { candidate in
+                guard candidate.kind == .visualRegion else { return true }
+                return !applicationWindows.contains {
+                    nearlyMatches(candidate.frame, $0.frame)
+                }
+            }
             .min { lhs, rhs in
                 if lhs.kind != rhs.kind {
                     return lhs.kind == .visualRegion
@@ -36,6 +45,17 @@ public struct WindowCandidate: Equatable, Sendable {
                 if lhsArea == rhsArea { return lhs.id < rhs.id }
                 return lhsArea < rhsArea
             }
+    }
+
+    private static func nearlyMatches(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull, !intersection.isEmpty else { return false }
+        let intersectionArea = intersection.width * intersection.height
+        let largerArea = max(
+            lhs.width * lhs.height,
+            rhs.width * rhs.height
+        )
+        return largerArea > 0 && intersectionArea / largerArea >= 0.9
     }
 
     public static func stableCandidates(
