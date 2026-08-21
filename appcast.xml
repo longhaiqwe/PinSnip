@@ -6,6 +6,27 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.7.3</title>
+            <pubDate>Fri, 21 Aug 2026 09:31:15 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.3</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.3</sparkle:fullReleaseNotesLink>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>0.7.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.7.3
+
+### 修复
+
+- 按 App 截图时改用 macOS 单窗口捕获，保留窗口真实的透明圆角，不再把圆角外的桌面底色写进图片。
+- 手动框选、调整过尺寸、视觉识别区域或不可共享窗口会自动回退到矩形截图，保持原有截图流程稳定。
+
+### 下载
+
+推荐下载 `PinSnip-v0.7.3-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.7.3/PinSnip-v0.7.3-macOS-universal.zip" length="3035720" type="application/octet-stream" sparkle:edSignature="e+wbZXdwrKS6lZl6fXm3D8bxh7kfV2EFPu/3FPmPhS3Erd/Igi2BsSoybuxQB7iZu0WI3QA0HVhgCz5k+Ct3DA=="/>
+        </item>
+        <item>
             <title>0.7.2</title>
             <pubDate>Thu, 20 Aug 2026 23:32:32 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.2</link>
