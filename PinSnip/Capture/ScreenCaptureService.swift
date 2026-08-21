@@ -4,11 +4,14 @@ import ScreenCaptureKit
 
 enum ScreenCaptureError: LocalizedError {
     case displayUnavailable
+    case windowUnavailable
 
     var errorDescription: String? {
         switch self {
         case .displayUnavailable:
             return "找不到可截取的显示器。"
+        case .windowUnavailable:
+            return "找不到可截取的窗口。"
         }
     }
 }
@@ -44,6 +47,35 @@ final class ScreenCaptureService {
         case .filteredDisplay:
             return try await captureFilteredDisplay(screen)
         }
+    }
+
+    func captureWindow(id: CGWindowID, pixelScale: CGFloat) async throws -> CGImage {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: true
+        )
+        guard let window = content.windows.first(where: { $0.windowID == id }) else {
+            throw ScreenCaptureError.windowUnavailable
+        }
+
+        let policy = WindowCaptureConfiguration(
+            pointSize: window.frame.size,
+            pixelScale: pixelScale
+        )
+        let filter = SCContentFilter(desktopIndependentWindow: window)
+        let configuration = SCStreamConfiguration()
+        configuration.width = policy.pixelWidth
+        configuration.height = policy.pixelHeight
+        configuration.pixelFormat = kCVPixelFormatType_32BGRA
+        configuration.scalesToFit = policy.scalesToFit
+        configuration.showsCursor = CaptureCursorPolicy.staticScreenshotShowsCursor
+        configuration.shouldBeOpaque = policy.shouldBeOpaque
+        configuration.ignoreShadowsSingleWindow = policy.ignoresShadow
+        configuration.ignoreGlobalClipSingleWindow = true
+        return try await SCScreenshotManager.captureImage(
+            contentFilter: filter,
+            configuration: configuration
+        )
     }
 
     @available(macOS 26.0, *)

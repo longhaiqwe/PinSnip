@@ -15,6 +15,14 @@ enum CaptureResultAction {
     case scrollCapture
 }
 
+struct CaptureResult {
+    let image: CGImage
+    let annotations: [Annotation]
+    let selectionRect: CGRect
+    let windowID: CGWindowID?
+    let action: CaptureResultAction
+}
+
 @MainActor
 final class SelectionOverlayView: NSView {
     private enum Phase { case selecting, editing }
@@ -46,7 +54,7 @@ final class SelectionOverlayView: NSView {
 
     private let screenshot: CGImage
     private let purpose: CaptureOverlayPurpose
-    private let onResult: (CGImage, CGRect, CaptureResultAction) -> Void
+    private let onResult: (CaptureResult) -> Void
     private let onCancel: () -> Void
     private var phase = Phase.selecting
     private var selectionState: WindowSelectionState
@@ -94,7 +102,7 @@ final class SelectionOverlayView: NSView {
         initialPointer: CGPoint,
         initialSelectionRect: CGRect,
         purpose: CaptureOverlayPurpose,
-        onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
+        onResult: @escaping (CaptureResult) -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.screenshot = screenshot
@@ -763,11 +771,27 @@ final class SelectionOverlayView: NSView {
 
     private func finish(_ action: CaptureResultAction) {
         if case .recordGIF = action {
-            onResult(screenshot, selectionRect, action)
+            onResult(
+                CaptureResult(
+                    image: screenshot,
+                    annotations: [],
+                    selectionRect: selectionRect,
+                    windowID: nil,
+                    action: action
+                )
+            )
             return
         }
         if case .scrollCapture = action {
-            onResult(screenshot, selectionRect, action)
+            onResult(
+                CaptureResult(
+                    image: screenshot,
+                    annotations: [],
+                    selectionRect: selectionRect,
+                    windowID: nil,
+                    action: action
+                )
+            )
             return
         }
         let scale = CGFloat(screenshot.width) / max(1, bounds.width)
@@ -781,11 +805,15 @@ final class SelectionOverlayView: NSView {
         let mapped = document.annotations.map {
             $0.mapped(relativeTo: selectionRect.origin, scale: scale)
         }
-        guard let result = AnnotationRenderer.render(baseImage: crop, annotations: mapped) else {
-            NSSound.beep()
-            return
-        }
-        onResult(result, selectionRect, action)
+        onResult(
+            CaptureResult(
+                image: crop,
+                annotations: mapped,
+                selectionRect: selectionRect,
+                windowID: selectionState.selectedApplicationWindowID(matching: selectionRect),
+                action: action
+            )
+        )
     }
 
     private func drawSizeLabel() {

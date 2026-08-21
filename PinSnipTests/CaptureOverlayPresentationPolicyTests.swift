@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import PinSnipCore
 
@@ -23,6 +24,19 @@ final class CaptureOverlayPresentationPolicyTests: XCTestCase {
 
     func testStaticScreenshotDoesNotCaptureCursor() {
         XCTAssertFalse(CaptureCursorPolicy.staticScreenshotShowsCursor)
+    }
+
+    func testWindowCapturePreservesTransparencyAndExcludesShadow() {
+        let configuration = WindowCaptureConfiguration(
+            pointSize: CGSize(width: 320, height: 180),
+            pixelScale: 2
+        )
+
+        XCTAssertEqual(configuration.pixelWidth, 640)
+        XCTAssertEqual(configuration.pixelHeight, 360)
+        XCTAssertFalse(configuration.shouldBeOpaque)
+        XCTAssertTrue(configuration.ignoresShadow)
+        XCTAssertTrue(configuration.scalesToFit)
     }
 
     func testOverlayRemainsVisibleWhenMenuBarAppIsInactive() {

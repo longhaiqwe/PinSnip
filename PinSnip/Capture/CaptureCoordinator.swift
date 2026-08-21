@@ -191,12 +191,10 @@ final class CaptureCoordinator {
             initialPointer: initialPointer,
             initialSelectionRect: initialSelectionRect,
             purpose: purpose,
-            onResult: { [weak self] image, selectionRect, action in
+            onResult: { [weak self] result in
                 self?.complete(
-                    image: image,
-                    selectionRect: selectionRect,
-                    screen: screen,
-                    action: action
+                    result,
+                    screen: screen
                 )
             },
             onCancel: { [weak self] in self?.cancel() }
@@ -241,26 +239,50 @@ final class CaptureCoordinator {
     }
 
     private func complete(
-        image: CGImage,
-        selectionRect: CGRect,
-        screen: NSScreen,
-        action: CaptureResultAction
+        _ result: CaptureResult,
+        screen: NSScreen
     ) {
         lastCaptureRegion = LastCaptureRegion(
-            rect: selectionRect,
+            rect: result.selectionRect,
             screenSize: screen.frame.size
         )
-        if case .recordGIF = action {
+        if case .recordGIF = result.action {
             dismissOverlay()
-            beginGIFRecording(screen: screen, selectionRect: selectionRect)
+            beginGIFRecording(screen: screen, selectionRect: result.selectionRect)
             return
         }
-        if case .scrollCapture = action {
+        if case .scrollCapture = result.action {
             dismissOverlay()
-            beginScrollingCapture(screen: screen, selectionRect: selectionRect)
+            beginScrollingCapture(screen: screen, selectionRect: result.selectionRect)
             return
         }
         dismissOverlay()
+
+        let captureService = captureService
+        Task { [weak self] in
+            guard let self else { return }
+            var baseImage = result.image
+            if let windowID = result.windowID,
+               let windowImage = try? await captureService.captureWindow(
+                   id: windowID,
+                   pixelScale: screen.backingScaleFactor
+               ),
+               windowImage.width == result.image.width,
+               windowImage.height == result.image.height {
+                baseImage = windowImage
+            }
+            guard let image = AnnotationRenderer.render(
+                baseImage: baseImage,
+                annotations: result.annotations
+            ) else {
+                NSSound.beep()
+                return
+            }
+            self.deliver(image, action: result.action)
+        }
+    }
+
+    private func deliver(_ image: CGImage, action: CaptureResultAction) {
         switch action {
         case .copy:
             let copiedImage = CaptureOutputService.copy(image, style: shareStyle)

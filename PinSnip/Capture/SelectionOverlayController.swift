@@ -10,7 +10,7 @@ final class SelectionOverlayController: NSWindowController {
         initialPointer: CGPoint,
         initialSelectionRect: CGRect,
         purpose: CaptureOverlayPurpose,
-        onResult: @escaping (CGImage, CGRect, CaptureResultAction) -> Void,
+        onResult: @escaping (CaptureResult) -> Void,
         onCancel: @escaping () -> Void
     ) {
         let styleMask: NSWindow.StyleMask = CaptureOverlayPresentationPolicy.preservesFrontmostApplication

@@ -38,6 +38,31 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         )
     }
 
+    func testExactWindowSelectionUsesTransparentWindowCapture() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let service = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "PinSnip/Capture/ScreenCaptureService.swift"
+            ),
+            encoding: .utf8
+        )
+        let overlay = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "PinSnip/Capture/SelectionOverlayView.swift"
+            ),
+            encoding: .utf8
+        )
+        let coordinator = try captureCoordinatorSource()
+
+        XCTAssertTrue(service.contains("SCContentFilter(desktopIndependentWindow: window)"))
+        XCTAssertTrue(service.contains("configuration.shouldBeOpaque = policy.shouldBeOpaque"))
+        XCTAssertTrue(service.contains("configuration.ignoreShadowsSingleWindow = policy.ignoresShadow"))
+        XCTAssertTrue(overlay.contains("selectedApplicationWindowID(matching: selectionRect)"))
+        XCTAssertTrue(coordinator.contains("captureService.captureWindow("))
+    }
+
     private func captureCoordinatorSource() throws -> String {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

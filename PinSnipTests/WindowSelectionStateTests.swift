@@ -24,6 +24,37 @@ final class WindowSelectionStateTests: XCTestCase {
 
         XCTAssertTrue(state.end(minimumDimension: 3))
         XCTAssertEqual(state.rect, CGRect(x: 20, y: 20, width: 100, height: 100))
+        XCTAssertEqual(
+            state.selectedApplicationWindowID(matching: state.rect),
+            candidates[1].id
+        )
+    }
+
+    func testResizingLockedWindowFallsBackToRectangularCapture() {
+        var state = WindowSelectionState(candidates: candidates)
+        let point = CGPoint(x: 30, y: 30)
+        state.hover(at: point)
+        state.begin(at: point)
+        XCTAssertTrue(state.end(minimumDimension: 3))
+
+        let resizedRect = state.rect.insetBy(dx: 4, dy: 4)
+
+        XCTAssertNil(state.selectedApplicationWindowID(matching: resizedRect))
+    }
+
+    func testVisualRegionFallsBackToRectangularCapture() {
+        let visualRegion = WindowCandidate(
+            id: .max,
+            frame: CGRect(x: 20, y: 20, width: 100, height: 100),
+            kind: .visualRegion
+        )
+        var state = WindowSelectionState(candidates: [visualRegion])
+        let point = CGPoint(x: 30, y: 30)
+        state.hover(at: point)
+        state.begin(at: point)
+        XCTAssertTrue(state.end(minimumDimension: 3))
+
+        XCTAssertNil(state.selectedApplicationWindowID(matching: state.rect))
     }
 
     func testDragOverridesAutomaticWindowSelection() {

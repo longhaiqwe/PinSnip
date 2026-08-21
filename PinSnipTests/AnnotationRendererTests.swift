@@ -3,6 +3,17 @@ import XCTest
 @testable import PinSnipCore
 
 final class AnnotationRendererTests: XCTestCase {
+    func testRenderingPreservesTransparentWindowCorners() throws {
+        let base = try XCTUnwrap(makeImageWithTransparentCorners(width: 40, height: 30))
+
+        let rendered = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [])
+        )
+
+        XCTAssertEqual(try XCTUnwrap(pixel(in: rendered, x: 0, y: 0)).alpha, 0)
+        XCTAssertEqual(try XCTUnwrap(pixel(in: rendered, x: 20, y: 15)).alpha, 255)
+    }
+
     func testOriginalShareStyleReturnsTheUnmodifiedScreenshot() throws {
         let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 12, green: 130, blue: 220))
 
@@ -207,6 +218,21 @@ final class AnnotationRendererTests: XCTestCase {
             height: height,
             color: CGColor(red: 0.92, green: 0.16, blue: 0.12, alpha: 1)
         )
+    }
+
+    private func makeImageWithTransparentCorners(width: Int, height: Int) -> CGImage? {
+        guard let context = CGContext(
+            data: nil,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: width * 4,
+            space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        context.setFillColor(CGColor(red: 0.04, green: 0.05, blue: 0.06, alpha: 1))
+        context.fillEllipse(in: CGRect(x: 0, y: 0, width: width, height: height))
+        return context.makeImage()
     }
 
     private func makeLightImageWithMutedBlueAccents(width: Int, height: Int) -> CGImage? {

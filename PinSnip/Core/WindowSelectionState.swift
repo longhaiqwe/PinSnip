@@ -5,7 +5,8 @@ public struct WindowSelectionState: Equatable, Sendable {
 
     private var candidates: [WindowCandidate]
     private var dragStart: CGPoint?
-    private var pressedWindowRect: CGRect?
+    private var pressedWindowCandidate: WindowCandidate?
+    private var selectedWindowCandidate: WindowCandidate?
     private var isDragging = false
 
     public init(candidates: [WindowCandidate], initialRect: CGRect = .zero) {
@@ -15,7 +16,8 @@ public struct WindowSelectionState: Equatable, Sendable {
 
     public mutating func hover(at point: CGPoint) {
         guard dragStart == nil else { return }
-        rect = WindowCandidate.best(at: point, in: candidates)?.frame ?? .zero
+        selectedWindowCandidate = WindowCandidate.best(at: point, in: candidates)
+        rect = selectedWindowCandidate?.frame ?? .zero
     }
 
     public mutating func addCandidates(
@@ -28,7 +30,7 @@ public struct WindowSelectionState: Equatable, Sendable {
 
     public mutating func begin(at point: CGPoint) {
         dragStart = point
-        pressedWindowRect = WindowCandidate.best(at: point, in: candidates)?.frame
+        pressedWindowCandidate = WindowCandidate.best(at: point, in: candidates)
         isDragging = false
     }
 
@@ -51,17 +53,35 @@ public struct WindowSelectionState: Equatable, Sendable {
     @discardableResult
     public mutating func end(minimumDimension: CGFloat) -> Bool {
         if !isDragging {
-            rect = pressedWindowRect ?? .zero
+            selectedWindowCandidate = pressedWindowCandidate
+            rect = selectedWindowCandidate?.frame ?? .zero
+        } else {
+            selectedWindowCandidate = nil
         }
 
         dragStart = nil
-        pressedWindowRect = nil
+        pressedWindowCandidate = nil
         isDragging = false
 
         guard rect.width >= minimumDimension, rect.height >= minimumDimension else {
             rect = .zero
+            selectedWindowCandidate = nil
             return false
         }
         return true
+    }
+
+    public func selectedApplicationWindowID(
+        matching selectionRect: CGRect,
+        tolerance: CGFloat = 0.5
+    ) -> CGWindowID? {
+        guard let selectedWindowCandidate,
+              selectedWindowCandidate.kind == .applicationWindow,
+              abs(selectedWindowCandidate.frame.minX - selectionRect.minX) <= tolerance,
+              abs(selectedWindowCandidate.frame.minY - selectionRect.minY) <= tolerance,
+              abs(selectedWindowCandidate.frame.width - selectionRect.width) <= tolerance,
+              abs(selectedWindowCandidate.frame.height - selectionRect.height) <= tolerance
+        else { return nil }
+        return selectedWindowCandidate.id
     }
 }
