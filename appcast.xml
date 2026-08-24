@@ -6,6 +6,36 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.8.0</title>
+            <pubDate>Mon, 24 Aug 2026 13:18:30 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.0</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.0</sparkle:fullReleaseNotesLink>
+            <sparkle:version>12</sparkle:version>
+            <sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.8.0
+
+### 新功能
+
+- 截图工具栏新增文字标注。
+- 文字支持小、中、大三档字号。
+- 文字支持六种常用颜色。
+- 拖动文字框四角可以调节宽度并自动换行。
+- 拖动文字框边框可以移动位置。
+- 双击已经完成的文字可以重新编辑。
+
+### 改进
+
+- 文字输入框改为透明多行编辑界面。
+- 文字工具使用简洁的 `T` 图标。
+
+### 下载
+
+推荐下载 `PinSnip-v0.8.0-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.8.0/PinSnip-v0.8.0-macOS-universal.zip" length="3102050" type="application/octet-stream" sparkle:edSignature="9Ys44TlWx2R9CzPAsQ/pS1ELoNn9prluAPeRT2hJlegzs8frh4DwP3yYw76SVkDFRIx7ATAf4DKGL010RJRJBQ=="/>
+        </item>
+        <item>
             <title>0.7.3</title>
             <pubDate>Fri, 21 Aug 2026 09:31:15 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.7.3</link>
