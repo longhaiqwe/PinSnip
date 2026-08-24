@@ -66,4 +66,42 @@ final class AnnotationDocumentTests: XCTestCase {
         document.redo()
         XCTAssertEqual(document.nextSequenceNumber, 2)
     }
+
+    func testReplacingTextBoxIsOneUndoableOperation() {
+        let original = Annotation.text(
+            rect: CGRect(x: 10, y: 12, width: 120, height: 30),
+            text: "一段文字",
+            color: .black,
+            fontSize: 20
+        )
+        let resized = Annotation.text(
+            rect: CGRect(x: 10, y: 12, width: 64, height: 56),
+            text: "一段文字",
+            color: .white,
+            fontSize: 20
+        )
+        var document = AnnotationDocument(annotations: [original])
+
+        XCTAssertTrue(document.replace(at: 0, with: resized))
+        XCTAssertEqual(document.annotations, [resized])
+
+        document.undo()
+        XCTAssertEqual(document.annotations, [original])
+    }
+
+    func testRemovingEditedTextIsOneUndoableOperation() {
+        let text = Annotation.text(
+            rect: CGRect(x: 10, y: 12, width: 120, height: 30),
+            text: "删除我",
+            color: .black,
+            fontSize: 20
+        )
+        var document = AnnotationDocument(annotations: [text])
+
+        XCTAssertTrue(document.remove(at: 0))
+        XCTAssertTrue(document.annotations.isEmpty)
+
+        document.undo()
+        XCTAssertEqual(document.annotations, [text])
+    }
 }

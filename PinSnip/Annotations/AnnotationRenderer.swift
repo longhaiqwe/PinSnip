@@ -114,6 +114,9 @@ public enum AnnotationRenderer {
             context.addLine(to: right)
             context.strokePath()
 
+        case let .text(rect, text, color, fontSize):
+            drawText(text, rect: rect, color: color, fontSize: fontSize, in: context)
+
         case let .number(center, value, color, diameter):
             drawNumber(
                 value,
@@ -146,6 +149,68 @@ public enum AnnotationRenderer {
             context.draw(mosaicImage, in: canvas)
             context.restoreGState()
         }
+    }
+
+    public static func drawText(
+        _ text: String,
+        rect: CGRect,
+        color: RGBAColor,
+        fontSize: CGFloat,
+        in context: CGContext
+    ) {
+        guard !text.isEmpty else { return }
+        let size = max(8, fontSize)
+        let font = CTFontCreateUIFontForLanguage(.system, size, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font,
+            NSAttributedString.Key(kCTForegroundColorAttributeName as String): cgColor(color)
+        ]
+        let attributedText = NSAttributedString(string: text, attributes: attributes)
+        let framesetter = CTFramesetterCreateWithAttributedString(attributedText)
+        let path = CGPath(rect: TextAnnotationLayout.contentRect(in: rect), transform: nil)
+        let frame = CTFramesetterCreateFrame(
+            framesetter,
+            CFRange(location: 0, length: attributedText.length),
+            path,
+            nil
+        )
+
+        context.saveGState()
+        context.textMatrix = .identity
+        CTFrameDraw(frame, context)
+        context.restoreGState()
+    }
+
+    public static func suggestedTextBoxHeight(
+        for text: String,
+        width: CGFloat,
+        fontSize: CGFloat
+    ) -> CGFloat {
+        let size = max(8, fontSize)
+        let font = CTFontCreateUIFontForLanguage(.system, size, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        let attributes: [NSAttributedString.Key: Any] = [
+            NSAttributedString.Key(kCTFontAttributeName as String): font
+        ]
+        let framesetter = CTFramesetterCreateWithAttributedString(
+            NSAttributedString(string: text.isEmpty ? " " : text, attributes: attributes)
+        )
+        let suggested = CTFramesetterSuggestFrameSizeWithConstraints(
+            framesetter,
+            CFRange(location: 0, length: 0),
+            nil,
+            CGSize(
+                width: TextAnnotationLayout.effectiveContentWidth(for: width),
+                height: .greatestFiniteMagnitude
+            ),
+            nil
+        )
+        let verticalInsets = TextAnnotationLayout.verticalTextInset * 2
+        return max(
+            ceil(suggested.height + verticalInsets),
+            ceil(size * 1.25 + verticalInsets)
+        )
     }
 
     private static func drawNumber(

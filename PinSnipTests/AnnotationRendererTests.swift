@@ -175,6 +175,93 @@ final class AnnotationRendererTests: XCTestCase {
         )
     }
 
+    func testTextAnnotationRendersVisibleColoredGlyphs() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 96, height: 64, gray: 1))
+        let annotation = Annotation.text(
+            rect: CGRect(x: 8, y: 8, width: 72, height: 36),
+            text: "Text",
+            color: RGBAColor(red: 1, green: 0, blue: 0),
+            fontSize: 24
+        )
+
+        let rendered = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [annotation])
+        )
+        let textPixels = try (8...48).flatMap { y in
+            try (6...72).map { x in
+                try XCTUnwrap(pixel(in: rendered, x: x, y: y))
+            }
+        }
+
+        XCTAssertTrue(
+            textPixels.contains { $0.red > 200 && $0.green < 120 && $0.blue < 120 },
+            "Expected visible red glyph pixels in the text annotation area"
+        )
+    }
+
+    func testNarrowTextBoxWrapsAcrossMoreVerticalPixelsThanWideTextBox() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 240, height: 120, gray: 1))
+        let color = RGBAColor(red: 1, green: 0, blue: 0)
+        let text = "Text Text Text Text"
+        let narrow = Annotation.text(
+            rect: CGRect(x: 8, y: 8, width: 62, height: 96),
+            text: text,
+            color: color,
+            fontSize: 20
+        )
+        let wide = Annotation.text(
+            rect: CGRect(x: 8, y: 8, width: 210, height: 96),
+            text: text,
+            color: color,
+            fontSize: 20
+        )
+
+        let narrowImage = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [narrow])
+        )
+        let wideImage = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [wide])
+        )
+
+        XCTAssertGreaterThan(
+            try coloredVerticalSpan(in: narrowImage),
+            try coloredVerticalSpan(in: wideImage) + 10
+        )
+    }
+
+    func testTextAnnotationUsesChosenColor() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 120, height: 64, gray: 1))
+        let annotation = Annotation.text(
+            rect: CGRect(x: 8, y: 8, width: 100, height: 40),
+            text: "Blue",
+            color: RGBAColor(red: 0.05, green: 0.2, blue: 0.95),
+            fontSize: 24
+        )
+        let rendered = try XCTUnwrap(
+            AnnotationRenderer.render(baseImage: base, annotations: [annotation])
+        )
+
+        let pixels = try (0..<rendered.height).flatMap { y in
+            try (0..<rendered.width).map { x in
+                try XCTUnwrap(pixel(in: rendered, x: x, y: y))
+            }
+        }
+        XCTAssertTrue(pixels.contains { $0.blue > 180 && $0.red < 150 })
+    }
+
+    private func coloredVerticalSpan(in image: CGImage) throws -> Int {
+        var rows: [Int] = []
+        for y in 0..<image.height {
+            let containsColor = try (0..<image.width).contains { x in
+                let value = try XCTUnwrap(pixel(in: image, x: x, y: y))
+                return value.red > 200 && value.green < 150 && value.blue < 150
+            }
+            if containsColor { rows.append(y) }
+        }
+        guard let first = rows.first, let last = rows.last else { return 0 }
+        return last - first + 1
+    }
+
     private func makeSolidImage(width: Int, height: Int, gray: UInt8) -> CGImage? {
         let channel: UInt8 = gray == 0 ? 0 : 255
         return makeSolidImage(width: width, height: height, red: channel, green: channel, blue: channel)

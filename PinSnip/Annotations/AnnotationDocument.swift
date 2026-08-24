@@ -27,6 +27,24 @@ public struct AnnotationDocument: Equatable, Sendable {
         annotations.append(annotation)
     }
 
+    @discardableResult
+    public mutating func replace(at index: Int, with annotation: Annotation) -> Bool {
+        guard annotations.indices.contains(index), annotations[index] != annotation else {
+            return false
+        }
+        checkpoint()
+        annotations[index] = annotation
+        return true
+    }
+
+    @discardableResult
+    public mutating func remove(at index: Int) -> Bool {
+        guard annotations.indices.contains(index) else { return false }
+        checkpoint()
+        annotations.remove(at: index)
+        return true
+    }
+
     public mutating func clear() {
         guard !annotations.isEmpty else { return }
         checkpoint()
