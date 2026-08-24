@@ -165,4 +165,75 @@ final class AnnotationTransformTests: XCTestCase {
             CGRect(x: 0, y: 0, width: 30, height: 20)
         )
     }
+
+    func testMovingRectanglePreservesStyleAndStaysInsideSelection() {
+        let original = Annotation.rectangle(
+            CGRect(x: 30, y: 40, width: 80, height: 50),
+            RGBAColor(red: 1, green: 0.25, blue: 0.29),
+            3
+        )
+
+        XCTAssertEqual(
+            RectangleAnnotationLayout.move(
+                original,
+                by: CGSize(width: 160, height: -100),
+                inside: CGRect(x: 0, y: 0, width: 200, height: 120)
+            ),
+            .rectangle(
+                CGRect(x: 120, y: 0, width: 80, height: 50),
+                RGBAColor(red: 1, green: 0.25, blue: 0.29),
+                3
+            )
+        )
+    }
+
+    func testResizingRectangleUsesAllEightHandlesAndPreservesStyle() {
+        let original = Annotation.rectangle(
+            CGRect(x: 20, y: 30, width: 100, height: 80),
+            .black,
+            4
+        )
+
+        XCTAssertEqual(
+            RectangleAnnotationLayout.resize(
+                original,
+                using: .northEast,
+                to: CGPoint(x: 160, y: 150),
+                inside: CGRect(x: 0, y: 0, width: 300, height: 200),
+                minimumDimension: 8
+            ),
+            .rectangle(CGRect(x: 20, y: 30, width: 140, height: 120), .black, 4)
+        )
+        XCTAssertEqual(SelectionResizeHandle.allCases.count, 8)
+    }
+
+    func testRectangleHitTestingIncludesInteriorAndSmallOutsideTolerance() {
+        let rectangle = Annotation.rectangle(
+            CGRect(x: 20, y: 30, width: 100, height: 80),
+            .black,
+            3
+        )
+
+        XCTAssertTrue(
+            RectangleAnnotationLayout.hitTest(
+                CGPoint(x: 70, y: 70),
+                annotation: rectangle,
+                tolerance: 5
+            )
+        )
+        XCTAssertTrue(
+            RectangleAnnotationLayout.hitTest(
+                CGPoint(x: 17, y: 70),
+                annotation: rectangle,
+                tolerance: 5
+            )
+        )
+        XCTAssertFalse(
+            RectangleAnnotationLayout.hitTest(
+                CGPoint(x: 10, y: 70),
+                annotation: rectangle,
+                tolerance: 5
+            )
+        )
+    }
 }

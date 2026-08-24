@@ -308,6 +308,18 @@ final class SelectionOverlayView: NSView {
         original: Annotation
     )?
     private var textTransformPreview: Annotation?
+    private var selectedRectangleIndex: Int?
+    private var activeRectangleResize: (
+        index: Int,
+        handle: SelectionResizeHandle,
+        original: Annotation
+    )?
+    private var activeRectangleMove: (
+        index: Int,
+        startPoint: CGPoint,
+        original: Annotation
+    )?
+    private var rectangleTransformPreview: Annotation?
     private var document = AnnotationDocument()
     private var cachedMosaicNSImage: NSImage?
     private var mosaicNSImage: NSImage? {
@@ -405,6 +417,22 @@ final class SelectionOverlayView: NSView {
                 addCursorRect(
                     textResizeHandleRect(handle: handle, in: rect).insetBy(dx: -3, dy: -3),
                     cursor: Self.leftRightResizeCursor
+                )
+            }
+        }
+        if let rect = selectedRectangleRect {
+            addCursorRect(rect, cursor: .openHand)
+            for handle in SelectionResizeHandle.allCases {
+                let center = SelectionAdjustment.center(of: handle, in: rect)
+                let radius = SelectionOverlayStyle.handleHitRadius
+                addCursorRect(
+                    CGRect(
+                        x: center.x - radius,
+                        y: center.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    ),
+                    cursor: Self.cursor(for: SelectionAdjustment.cursor(for: handle))
                 )
             }
         }
@@ -541,6 +569,8 @@ final class SelectionOverlayView: NSView {
         for (index, annotation) in document.annotations.enumerated() {
             if index == activeTextEditingIndex {
                 continue
+            } else if index == selectedRectangleIndex, let rectangleTransformPreview {
+                draw(rectangleTransformPreview)
             } else if index == selectedTextIndex, let textTransformPreview {
                 draw(textTransformPreview)
             } else {
@@ -551,6 +581,7 @@ final class SelectionOverlayView: NSView {
             draw(currentAnnotation)
         }
         drawSelectedTextBox()
+        drawSelectedRectangleBox()
         drawSizeLabel()
         if phase == .editing {
             for handle in SelectionResizeHandle.allCases {
@@ -588,6 +619,17 @@ final class SelectionOverlayView: NSView {
             toolbar.isHidden = true
         case .editing:
             commitTextEditing()
+            if let handle = rectangleResizeHandle(at: point),
+               let index = selectedRectangleIndex,
+               document.annotations.indices.contains(index) {
+                activeRectangleResize = (index, handle, document.annotations[index])
+                activeRectangleMove = nil
+                rectangleTransformPreview = document.annotations[index]
+                annotationStart = nil
+                currentAnnotation = nil
+                pencilPoints.removeAll()
+                return
+            }
             if let handle = textResizeHandle(at: point),
                let index = selectedTextIndex,
                document.annotations.indices.contains(index) {
@@ -626,7 +668,15 @@ final class SelectionOverlayView: NSView {
                 beginTextEditing(at: point)
                 return
             }
+            if tool == .rectangle,
+               let index = rectangleAnnotationIndex(at: point) {
+                selectRectangle(at: index)
+                activeRectangleMove = (index, point, document.annotations[index])
+                rectangleTransformPreview = document.annotations[index]
+                return
+            }
             clearTextSelection()
+            clearRectangleSelection()
             annotationStart = point
             pencilPoints = [point]
             currentAnnotation = annotation(from: point, to: point)
@@ -644,6 +694,29 @@ final class SelectionOverlayView: NSView {
                 constraint: aspectRatioOption.constraint
             )
         case .editing:
+            if let activeRectangleResize {
+                rectangleTransformPreview = RectangleAnnotationLayout.resize(
+                    activeRectangleResize.original,
+                    using: activeRectangleResize.handle,
+                    to: point,
+                    inside: selectionRect,
+                    minimumDimension: 8
+                )
+                needsDisplay = true
+                return
+            }
+            if let activeRectangleMove {
+                rectangleTransformPreview = RectangleAnnotationLayout.move(
+                    activeRectangleMove.original,
+                    by: CGSize(
+                        width: point.x - activeRectangleMove.startPoint.x,
+                        height: point.y - activeRectangleMove.startPoint.y
+                    ),
+                    inside: selectionRect
+                )
+                needsDisplay = true
+                return
+            }
             if let activeTextResize {
                 textTransformPreview = resizedTextAnnotation(
                     activeTextResize.original,
@@ -701,6 +774,34 @@ final class SelectionOverlayView: NSView {
             needsLayout = true
             window?.invalidateCursorRects(for: self)
         case .editing:
+            if let activeRectangleResize {
+                if let rectangleTransformPreview {
+                    _ = document.replace(
+                        at: activeRectangleResize.index,
+                        with: rectangleTransformPreview
+                    )
+                }
+                selectedRectangleIndex = activeRectangleResize.index
+                self.activeRectangleResize = nil
+                rectangleTransformPreview = nil
+                needsDisplay = true
+                window?.invalidateCursorRects(for: self)
+                return
+            }
+            if let activeRectangleMove {
+                if let rectangleTransformPreview {
+                    _ = document.replace(
+                        at: activeRectangleMove.index,
+                        with: rectangleTransformPreview
+                    )
+                }
+                selectedRectangleIndex = activeRectangleMove.index
+                self.activeRectangleMove = nil
+                rectangleTransformPreview = nil
+                needsDisplay = true
+                window?.invalidateCursorRects(for: self)
+                return
+            }
             if let activeTextResize {
                 if let textTransformPreview {
                     _ = document.replace(at: activeTextResize.index, with: textTransformPreview)
@@ -732,6 +833,10 @@ final class SelectionOverlayView: NSView {
             }
             if let currentAnnotation {
                 document.append(currentAnnotation)
+                if case .rectangle = currentAnnotation {
+                    selectedRectangleIndex = document.annotations.count - 1
+                    window?.invalidateCursorRects(for: self)
+                }
             }
             annotationStart = nil
             currentAnnotation = nil
@@ -767,6 +872,8 @@ final class SelectionOverlayView: NSView {
             return
         }
         if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
+            clearTextSelection()
+            clearRectangleSelection()
             event.modifierFlags.contains(.shift) ? document.redo() : document.undo()
             needsDisplay = true
             return
@@ -1054,6 +1161,7 @@ final class SelectionOverlayView: NSView {
             commitTextEditing()
             tool = selectedTool
             if selectedTool != .text { clearTextSelection() }
+            if selectedTool != .rectangle { clearRectangleSelection() }
             textOptionsBar.isHidden = selectedTool != .text
             updateToolButtons()
             needsLayout = true
@@ -1061,9 +1169,9 @@ final class SelectionOverlayView: NSView {
         }
         switch sender.tag {
         case 10:
-            commitTextEditing(); clearTextSelection(); document.undo(); needsDisplay = true
+            commitTextEditing(); clearTextSelection(); clearRectangleSelection(); document.undo(); needsDisplay = true
         case 11:
-            commitTextEditing(); clearTextSelection(); document.redo(); needsDisplay = true
+            commitTextEditing(); clearTextSelection(); clearRectangleSelection(); document.redo(); needsDisplay = true
         default:
             guard let action = CaptureToolbarAction(rawValue: sender.tag) else { return }
             switch action {
@@ -1321,6 +1429,7 @@ final class SelectionOverlayView: NSView {
         guard document.annotations.indices.contains(index),
               case let .text(_, _, color, fontSize) = document.annotations[index]
         else { return }
+        clearRectangleSelection()
         selectedTextIndex = index
         annotationColor = color
         annotationTextSize = TextAnnotationSizePreset.closest(to: fontSize)
@@ -1412,9 +1521,77 @@ final class SelectionOverlayView: NSView {
         }
     }
 
+    private var selectedRectangleRect: CGRect? {
+        guard let index = selectedRectangleIndex,
+              document.annotations.indices.contains(index)
+        else { return nil }
+        let annotation = rectangleTransformPreview ?? document.annotations[index]
+        guard case let .rectangle(rect, _, _) = annotation else { return nil }
+        return rect
+    }
+
+    private func rectangleAnnotationIndex(at point: CGPoint) -> Int? {
+        document.annotations.indices.reversed().first { index in
+            RectangleAnnotationLayout.hitTest(
+                point,
+                annotation: document.annotations[index],
+                tolerance: 5
+            )
+        }
+    }
+
+    private func selectRectangle(at index: Int) {
+        guard document.annotations.indices.contains(index),
+              case .rectangle = document.annotations[index]
+        else { return }
+        clearTextSelection()
+        selectedRectangleIndex = index
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private func clearRectangleSelection() {
+        selectedRectangleIndex = nil
+        activeRectangleResize = nil
+        activeRectangleMove = nil
+        rectangleTransformPreview = nil
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private func rectangleResizeHandle(at point: CGPoint) -> SelectionResizeHandle? {
+        guard let rect = selectedRectangleRect else { return nil }
+        return SelectionAdjustment.handle(
+            at: point,
+            in: rect,
+            hitRadius: SelectionOverlayStyle.handleHitRadius
+        )
+    }
+
+    private func drawSelectedRectangleBox() {
+        guard let rect = selectedRectangleRect else { return }
+        let outline = NSBezierPath(rect: rect.insetBy(dx: -2, dy: -2))
+        outline.lineWidth = 1
+        outline.setLineDash([2, 3], count: 2, phase: 0)
+        NSColor.systemBlue.withAlphaComponent(0.9).setStroke()
+        outline.stroke()
+
+        for handle in SelectionResizeHandle.allCases {
+            let center = SelectionAdjustment.center(of: handle, in: rect)
+            NSColor.white.setFill()
+            NSBezierPath(
+                ovalIn: SelectionOverlayStyle.handleOuterRect(centeredAt: center)
+            ).fill()
+            NSColor.systemBlue.setFill()
+            NSBezierPath(
+                ovalIn: SelectionOverlayStyle.handleInnerRect(centeredAt: center)
+            ).fill()
+        }
+    }
+
     private func beginTextEditing(at point: CGPoint, index: Int? = nil) {
         commitTextEditing()
         clearTextSelection()
+        clearRectangleSelection()
 
         var text = ""
         var textRect: CGRect

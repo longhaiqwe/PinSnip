@@ -117,6 +117,17 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         XCTAssertFalse(source.contains("field.backgroundColor = NSColor.black.withAlphaComponent"))
     }
 
+    func testRectangleAnnotationsCanBeSelectedMovedAndResized() throws {
+        let source = try selectionOverlaySource()
+
+        XCTAssertTrue(source.contains("selectedRectangleIndex"))
+        XCTAssertTrue(source.contains("activeRectangleMove"))
+        XCTAssertTrue(source.contains("activeRectangleResize"))
+        XCTAssertTrue(source.contains("RectangleAnnotationLayout.move"))
+        XCTAssertTrue(source.contains("RectangleAnnotationLayout.resize"))
+        XCTAssertTrue(source.contains("drawSelectedRectangleBox"))
+    }
+
     private func captureCoordinatorSource() throws -> String {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

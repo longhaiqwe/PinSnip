@@ -70,6 +70,59 @@ public enum TextAnnotationResizeEdge: Equatable, Sendable {
     case right
 }
 
+public enum RectangleAnnotationLayout {
+    public static func move(
+        _ annotation: Annotation,
+        by offset: CGSize,
+        inside bounds: CGRect
+    ) -> Annotation {
+        guard case let .rectangle(rect, color, lineWidth) = annotation else {
+            return annotation
+        }
+        let maximumX = max(bounds.minX, bounds.maxX - rect.width)
+        let maximumY = max(bounds.minY, bounds.maxY - rect.height)
+        let movedRect = CGRect(
+            x: min(max(bounds.minX, rect.minX + offset.width), maximumX),
+            y: min(max(bounds.minY, rect.minY + offset.height), maximumY),
+            width: rect.width,
+            height: rect.height
+        )
+        return .rectangle(movedRect, color, lineWidth)
+    }
+
+    public static func resize(
+        _ annotation: Annotation,
+        using handle: SelectionResizeHandle,
+        to point: CGPoint,
+        inside bounds: CGRect,
+        minimumDimension: CGFloat
+    ) -> Annotation {
+        guard case let .rectangle(rect, color, lineWidth) = annotation else {
+            return annotation
+        }
+        return .rectangle(
+            SelectionAdjustment.resize(
+                rect,
+                using: handle,
+                to: point,
+                inside: bounds,
+                minimumDimension: minimumDimension
+            ),
+            color,
+            lineWidth
+        )
+    }
+
+    public static func hitTest(
+        _ point: CGPoint,
+        annotation: Annotation,
+        tolerance: CGFloat
+    ) -> Bool {
+        guard case let .rectangle(rect, _, _) = annotation else { return false }
+        return rect.insetBy(dx: -max(0, tolerance), dy: -max(0, tolerance)).contains(point)
+    }
+}
+
 public enum TextAnnotationHandle: CaseIterable, Equatable, Sendable {
     case topLeft
     case topRight
