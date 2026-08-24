@@ -55,20 +55,23 @@ final class UpdateConfigurationTests: XCTestCase {
             contentsOf: repositoryRoot.appendingPathComponent("appcast.xml"),
             encoding: .utf8
         )
+        let currentItem = try XCTUnwrap(
+            appcast.components(separatedBy: "<item>").dropFirst().first?
+                .components(separatedBy: "</item>").first
+        )
 
-        XCTAssertTrue(appcast.contains("<item>"))
-        XCTAssertTrue(appcast.contains("<sparkle:version>12</sparkle:version>"))
+        XCTAssertTrue(currentItem.contains("<sparkle:version>13</sparkle:version>"))
         XCTAssertTrue(
-            appcast.contains(
-                "<sparkle:shortVersionString>0.8.0</sparkle:shortVersionString>"
+            currentItem.contains(
+                "<sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
-            appcast.contains(
-                "releases/download/v0.8.0/PinSnip-v0.8.0-macOS-universal.zip"
+            currentItem.contains(
+                "releases/download/v0.8.1/PinSnip-v0.8.1-macOS-universal.zip"
             )
         )
-        XCTAssertTrue(appcast.contains("sparkle:edSignature="))
+        XCTAssertTrue(currentItem.contains("sparkle:edSignature="))
     }
 
     func testAppcastReleaseNotesLinkResolvesToPublishedRelease() throws {
@@ -80,14 +83,14 @@ final class UpdateConfigurationTests: XCTestCase {
         XCTAssertTrue(
             appcast.contains(
                 "<sparkle:fullReleaseNotesLink>"
-                    + "https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.0"
+                    + "https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.1"
                     + "</sparkle:fullReleaseNotesLink>"
             )
         )
         XCTAssertFalse(
             appcast.contains(
                 "raw.githubusercontent.com/longhaiqwe/PinSnip/main/"
-                    + "PinSnip-v0.8.0-macOS-universal.md"
+                    + "PinSnip-v0.8.1-macOS-universal.md"
             )
         )
     }

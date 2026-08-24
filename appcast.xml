@@ -6,6 +6,27 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.8.1</title>
+            <pubDate>Mon, 24 Aug 2026 15:01:34 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.1</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.1</sparkle:fullReleaseNotesLink>
+            <sparkle:version>13</sparkle:version>
+            <sparkle:shortVersionString>0.8.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.8.1
+
+### 修复
+
+- 截图后添加的矩形现在可以移动位置。
+- 矩形支持拖动四边和四角调整大小。
+
+### 下载
+
+推荐下载 `PinSnip-v0.8.1-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.8.1/PinSnip-v0.8.1-macOS-universal.zip" length="3114128" type="application/octet-stream" sparkle:edSignature="y2+Uxv7B9IeFK/OuQQi7Ss9eBKD54xsigFFBtpJUYcL++cYjddN8Csp1q1Ad+PXzWkGlhSpCP+6HF+zZDGWFCw=="/>
+        </item>
+        <item>
             <title>0.8.0</title>
             <pubDate>Mon, 24 Aug 2026 13:18:30 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.8.0</link>
