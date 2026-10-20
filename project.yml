@@ -8,8 +8,8 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    MARKETING_VERSION: "0.8.1"
-    CURRENT_PROJECT_VERSION: "13"
+    MARKETING_VERSION: "0.9.0"
+    CURRENT_PROJECT_VERSION: "14"
     ENABLE_USER_SCRIPT_SANDBOXING: true
     ENABLE_APPINTENTS_METADATA_GENERATION: false
 packages:
@@ -26,6 +26,7 @@ targets:
       - PinSnip/Hotkeys
       - PinSnip/Output
       - PinSnip/Pins
+      - PinSnip/Shelf
       - path: PinSnip/Resources/PinSnip.icns
         buildPhase: resources
     dependencies:
@@ -59,6 +60,17 @@ targets:
     platform: macOS
     sources:
       - PinSnipTests
+      - PinSnip/Capture/TextAnnotationEditorView.swift
+      - PinSnip/Capture/SelectionOverlayView.swift
+      - PinSnip/Hotkeys/GlobalHotKeyCenter.swift
+      - PinSnip/Hotkeys/HotKeyShortcut+AppKit.swift
+      - PinSnip/Capture/MenuCaptureSession.swift
+      - PinSnip/Capture/ScreenGIFRecorder.swift
+      - PinSnip/Capture/ScreenCaptureService.swift
+      - PinSnip/Capture/GIFRecordingPanelController.swift
+      - PinSnip/Capture/GIFRecordingBorderController.swift
+      - PinSnip/Shelf/ShelfItem.swift
+      - PinSnip/Shelf/ShelfGIFPreview.swift
     dependencies:
       - target: PinSnipCore
     settings:
