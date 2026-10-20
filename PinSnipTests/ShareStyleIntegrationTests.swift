@@ -13,15 +13,15 @@ final class ShareStyleIntegrationTests: XCTestCase {
     func testOrdinaryAndScrollingCaptureUseTheSameSelectedStyle() throws {
         let source = try source(at: "PinSnip/Capture/CaptureCoordinator.swift")
 
-        XCTAssertTrue(source.contains("CaptureOutputService.copy(image, style: shareStyle)"))
-        XCTAssertTrue(source.contains("CaptureOutputService.save(image, style: shareStyle)"))
-        XCTAssertTrue(source.contains("CaptureOutputService.copyScrollingCapture(image, style: shareStyle)"))
-        XCTAssertTrue(source.contains("CaptureOutputService.saveScrollingCapture(image, style: shareStyle)"))
+        XCTAssertTrue(source.contains("CaptureOutputService.copy(image, style: shareStyle, borderSize: borderSize)"))
+        XCTAssertTrue(source.contains("CaptureOutputService.save(image, style: shareStyle, borderSize: borderSize)"))
+        XCTAssertTrue(source.contains("CaptureOutputService.copyScrollingCapture(image, style: shareStyle, borderSize: borderSize)"))
+        XCTAssertTrue(source.contains("CaptureOutputService.saveScrollingCapture(image, style: shareStyle, borderSize: borderSize)"))
     }
 
     func testStillAndScrollingPinsUseTheSelectedStyle() throws {
         let source = try source(at: "PinSnip/Capture/CaptureCoordinator.swift")
-        let styledPinPattern = #"let pinnedImage = CaptureOutputService\.render\(image, style: shareStyle\)\s+pinManager\.pin\(pinnedImage\)"#
+        let styledPinPattern = #"let pinnedImage = CaptureOutputService\.render\(image, style: shareStyle, borderSize: borderSize\)\s+pinManager\.pin\(pinnedImage\)"#
 
         XCTAssertEqual(
             source.matches(of: styledPinPattern),
@@ -34,7 +34,7 @@ final class ShareStyleIntegrationTests: XCTestCase {
         let coordinator = try source(at: "PinSnip/Capture/CaptureCoordinator.swift")
         let recorder = try source(at: "PinSnip/Capture/ScreenGIFRecorder.swift")
 
-        XCTAssertTrue(coordinator.contains("recorder.stop(style: shareStyle)"))
+        XCTAssertTrue(coordinator.contains("recorder.stop(style: shareStyle, borderSize: borderSize)"))
         XCTAssertTrue(recorder.contains("style: ShareStyle"))
         XCTAssertTrue(recorder.contains("style: style"))
     }

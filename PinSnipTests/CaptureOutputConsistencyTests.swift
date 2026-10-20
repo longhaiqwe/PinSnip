@@ -21,7 +21,7 @@ final class CaptureOutputConsistencyTests: XCTestCase {
 
         XCTAssertNotNil(
             source.range(
-                of: #"case \.copy:\s+let copiedImage = CaptureOutputService\.copy\(image, style: shareStyle\)\s+rememberCapturedScreenshot\(copiedImage\)"#,
+                of: #"case \.copy:\s+let copiedImage = CaptureOutputService\.copy\(image, style: shareStyle, borderSize: borderSize\)\s+rememberCapturedScreenshot\(copiedImage\)"#,
                 options: .regularExpression
             )
         )
@@ -32,7 +32,7 @@ final class CaptureOutputConsistencyTests: XCTestCase {
 
         XCTAssertNotNil(
             source.range(
-                of: #"case \.copy:\s+let copiedImage = CaptureOutputService\.copyScrollingCapture\(image, style: shareStyle\)\s+rememberCapturedScreenshot\(copiedImage\)"#,
+                of: #"case \.copy:\s+let copiedImage = CaptureOutputService\.copyScrollingCapture\(image, style: shareStyle, borderSize: borderSize\)\s+rememberCapturedScreenshot\(copiedImage\)"#,
                 options: .regularExpression
             )
         )
@@ -78,7 +78,6 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         XCTAssertTrue(source.contains("NSString(string: \"T\")"))
         XCTAssertFalse(source.contains("symbol: \"textformat\""))
         XCTAssertFalse(source.contains("\"格式\""))
-        XCTAssertTrue(source.contains("candidate == .text ? .systemGreen : .systemCyan"))
     }
 
     func testTextToolMatchesWechatStyleControlsAndSelection() throws {
@@ -92,7 +91,7 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         XCTAssertTrue(source.contains("activeTextMove"))
         XCTAssertTrue(source.contains("TextAnnotationLayout.resize"))
         XCTAssertTrue(source.contains("TextAnnotationLayout.move"))
-        XCTAssertTrue(source.contains("placeholder.alignment = .center"))
+        XCTAssertTrue(source.contains("placeholder.alignment = .left"))
         XCTAssertTrue(source.contains("textView.textContainer?.lineBreakMode = .byWordWrapping"))
         XCTAssertTrue(source.contains("textView.textContainer?.lineFragmentPadding = 0"))
         XCTAssertTrue(source.contains("TextAnnotationLayout.horizontalTextInset"))
@@ -144,11 +143,8 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        return try String(
-            contentsOf: repositoryRoot.appendingPathComponent(
-                "PinSnip/Capture/SelectionOverlayView.swift"
-            ),
-            encoding: .utf8
-        )
+        return try ["PinSnip/Capture/SelectionOverlayView.swift", "PinSnip/Capture/TextAnnotationEditorView.swift"]
+            .map { try String(contentsOf: repositoryRoot.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
     }
 }

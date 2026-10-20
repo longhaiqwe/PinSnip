@@ -3,7 +3,7 @@ import PinSnipCore
 
 @MainActor
 final class ScrollingCapturePanelController: NSWindowController {
-    private let mode: ScrollingCaptureMode
+    private var mode: ScrollingCaptureMode
     private let statusLabel: NSTextField
     private let cancelButton: NSButton
     private let saveButton: NSButton
@@ -37,7 +37,7 @@ final class ScrollingCapturePanelController: NSWindowController {
         pinButton = Self.actionButton(
             title: "贴图",
             symbol: "pin",
-            help: "贴原始长图到屏幕"
+            help: "贴长图到屏幕"
         )
         copyButton = Self.actionButton(
             title: "完成",
@@ -156,11 +156,23 @@ final class ScrollingCapturePanelController: NSWindowController {
 
     func update(frameCount: Int, pixelHeight: Int) {
         applyControlState(.capturing)
+        statusLabel.toolTip = nil
         statusLabel.stringValue = ScrollingCapturePanelLayout.progressText(
             isAutomatic: mode == .automatic,
             frameCount: frameCount,
             pixelHeight: pixelHeight
         )
+    }
+
+    func showManualScrollingRequired() {
+        mode = .manual
+        statusLabel.stringValue = "请手动滚动，结束点完成"
+        statusLabel.toolTip = "未检测到新的滚动内容，已切换为手动模式。把鼠标移到页面可滚动区域后缓慢滚动，截图会继续拼接；结束时点击完成、保存或贴图。"
+    }
+
+    func showAlignmentLost() {
+        statusLabel.stringValue = "未对齐，请向上滚动少许"
+        statusLabel.toolTip = "已保留成功拼接的部分。向上缓慢滚动以恢复重叠；对齐后会继续，也可保存当前结果。"
     }
 
     func showExporting() {
@@ -232,6 +244,8 @@ final class ScrollingCapturePanelController: NSWindowController {
             accessibilityDescription: help
         )
         button.imagePosition = .imageLeading
+        button.imageHugsTitle = true
+        button.alignment = .center
         button.bezelStyle = .rounded
         button.controlSize = .small
         button.toolTip = help

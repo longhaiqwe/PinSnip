@@ -8,22 +8,24 @@ enum CaptureOutputService {
     static func copy(
         _ image: CGImage,
         style: ShareStyle,
+        borderSize: ShareBorderSize = .automatic,
         to pasteboard: NSPasteboard = .general
     ) -> CGImage {
-        copyRendered(render(image, style: style), to: pasteboard)
+        copyRendered(render(image, style: style, borderSize: borderSize), to: pasteboard)
     }
 
     @discardableResult
     static func copyScrollingCapture(
         _ image: CGImage,
         style: ShareStyle,
+        borderSize: ShareBorderSize = .automatic,
         to pasteboard: NSPasteboard = .general
     ) -> CGImage {
-        copyRendered(render(image, style: style), to: pasteboard)
+        copyRendered(render(image, style: style, borderSize: borderSize), to: pasteboard)
     }
 
-    static func render(_ image: CGImage, style: ShareStyle) -> CGImage {
-        ShareCardRenderer.render(baseImage: image, style: style) ?? image
+    static func render(_ image: CGImage, style: ShareStyle, borderSize: ShareBorderSize = .automatic) -> CGImage {
+        ShareCardRenderer.render(baseImage: image, style: style, borderSize: borderSize) ?? image
     }
 
     @discardableResult
@@ -53,8 +55,8 @@ enum CaptureOutputService {
     }
 
     @discardableResult
-    static func save(_ image: CGImage, style: ShareStyle) -> CGImage? {
-        let output = render(image, style: style)
+    static func save(_ image: CGImage, style: ShareStyle, borderSize: ShareBorderSize = .automatic) -> CGImage? {
+        let output = render(image, style: style, borderSize: borderSize)
         return saveRendered(
             output,
             panelTitle: "保存分享图",
@@ -63,8 +65,8 @@ enum CaptureOutputService {
     }
 
     @discardableResult
-    static func saveScrollingCapture(_ image: CGImage, style: ShareStyle) -> CGImage? {
-        let output = render(image, style: style)
+    static func saveScrollingCapture(_ image: CGImage, style: ShareStyle, borderSize: ShareBorderSize = .automatic) -> CGImage? {
+        let output = render(image, style: style, borderSize: borderSize)
         return saveRendered(
             output,
             panelTitle: "保存分享长图",

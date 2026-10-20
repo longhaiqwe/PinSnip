@@ -17,9 +17,11 @@ final class CaptureCoordinator {
     private let permissionGate: ScreenCapturePermissionGate
     private let pinManager: PinWindowManager
     private var shareStyle: ShareStyle
+    private var borderSize: ShareBorderSize
     private var overlay: SelectionOverlayController?
     private var captureSessionState = CaptureSessionState()
     private var captureTask: Task<Void, Never>?
+    private var menuCaptureSession: MenuCaptureSession?
     private var captureTimeoutTask: Task<Void, Never>?
     private var visualDetectionTask: Task<Void, Never>?
     private var visualPrewarmTask: Task<Void, Never>?
@@ -36,21 +38,28 @@ final class CaptureCoordinator {
     private var historyPasteboardChangeCount: Int?
 
     var onCaptureCancellationAvailabilityChanged: ((Bool) -> Void)?
+    var onShelfCaptureActivityChanged: ((Bool) -> Void)?
 
     init(
         pinManager: PinWindowManager,
         shareStyle: ShareStyle = .paperCut,
+        borderSize: ShareBorderSize = .automatic,
         permissionGate: ScreenCapturePermissionGate = ScreenCapturePermissionGate(
             provider: SystemScreenCapturePermissionProvider()
         )
     ) {
         self.pinManager = pinManager
         self.shareStyle = shareStyle
+        self.borderSize = borderSize
         self.permissionGate = permissionGate
     }
 
     func updateShareStyle(_ style: ShareStyle) {
         shareStyle = style
+    }
+
+    func updateBorderSize(_ size: ShareBorderSize) {
+        borderSize = size
     }
 
     func prewarmCaptureAnalysis() {
@@ -61,12 +70,12 @@ final class CaptureCoordinator {
         }
     }
 
-    func startCapture() {
-        startCapture(restoring: nil, purpose: .stillImage)
+    func startCapture(trackingMenus: [NSMenu] = []) {
+        startCapture(restoring: nil, purpose: .stillImage, trackingMenus: trackingMenus)
     }
 
-    func startGIFRecordingSelection() {
-        startCapture(restoring: nil, purpose: .animatedGIF)
+    func startGIFRecordingSelection(trackingMenus: [NSMenu] = []) {
+        startCapture(restoring: nil, purpose: .animatedGIF, trackingMenus: trackingMenus)
     }
 
     func startScrollingCaptureSelection() {
@@ -83,7 +92,8 @@ final class CaptureCoordinator {
 
     private func startCapture(
         restoring region: LastCaptureRegion?,
-        purpose: CaptureOverlayPurpose
+        purpose: CaptureOverlayPurpose,
+        trackingMenus: [NSMenu] = []
     ) {
         guard !isPreparingGIFRecording, gifRecorder == nil,
               !isPreparingScrollingCapture, scrollingCapture == nil,
@@ -100,10 +110,35 @@ final class CaptureCoordinator {
             return
         }
         let mouseLocation = NSEvent.mouseLocation
+        // Preserve the live shelf before freezing the selection background.
+        // It must still be present if the user later switches to GIF recording.
+        onShelfCaptureActivityChanged?(true)
         let initialPointer = CGPoint(
             x: mouseLocation.x - screen.frame.minX,
             y: mouseLocation.y - screen.frame.minY
         )
+        if !trackingMenus.isEmpty {
+            let session = MenuCaptureSession(menus: trackingMenus)
+            menuCaptureSession = session
+            session.start(capture: captureService.captureOperation(for: screen)) { [weak self] result in
+                guard let self, self.captureSessionState.isCurrent(sessionID) else { return }
+                self.menuCaptureSession = nil
+                switch result {
+                case .success(let image):
+                    // Use frozen pixels only. Re-capturing a live window on export
+                    // would erase the menu that has just been dismissed.
+                    self.presentOverlay(screen: screen, screenshot: image, windowCandidates: [],
+                        initialPointer: initialPointer, sessionID: sessionID,
+                        restoring: region, purpose: purpose)
+                case .failure(let error):
+                    self.captureSessionState.end(sessionID)
+                    self.onShelfCaptureActivityChanged?(false)
+                    if error is MenuCaptureSession.Failure { self.presentCaptureTimeout() }
+                    else { self.presentCaptureError(error) }
+                }
+            }
+            return
+        }
         let initialWindowCandidates = windowDetector.candidates(on: screen)
         let captureService = captureService
         captureTask = Task { [weak self] in
@@ -157,6 +192,7 @@ final class CaptureCoordinator {
                 self.captureTimeoutTask?.cancel()
                 self.captureTimeoutTask = nil
                 self.captureTask = nil
+                self.onShelfCaptureActivityChanged?(false)
                 self.presentCaptureError(error)
             }
         }
@@ -170,6 +206,7 @@ final class CaptureCoordinator {
             self.captureTask?.cancel()
             self.captureTask = nil
             self.captureTimeoutTask = nil
+            self.onShelfCaptureActivityChanged?(false)
             self.presentCaptureTimeout()
         }
     }
@@ -247,7 +284,7 @@ final class CaptureCoordinator {
             screenSize: screen.frame.size
         )
         if case .recordGIF = result.action {
-            dismissOverlay()
+            dismissOverlay(preservingShelf: true)
             beginGIFRecording(screen: screen, selectionRect: result.selectionRect)
             return
         }
@@ -285,14 +322,14 @@ final class CaptureCoordinator {
     private func deliver(_ image: CGImage, action: CaptureResultAction) {
         switch action {
         case .copy:
-            let copiedImage = CaptureOutputService.copy(image, style: shareStyle)
+            let copiedImage = CaptureOutputService.copy(image, style: shareStyle, borderSize: borderSize)
             rememberCapturedScreenshot(copiedImage)
         case .save:
-            if let savedImage = CaptureOutputService.save(image, style: shareStyle) {
+            if let savedImage = CaptureOutputService.save(image, style: shareStyle, borderSize: borderSize) {
                 rememberCapturedScreenshot(savedImage)
             }
         case .pin:
-            let pinnedImage = CaptureOutputService.render(image, style: shareStyle)
+            let pinnedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
             pinManager.pin(pinnedImage)
             rememberCapturedScreenshot(pinnedImage)
         case .recordGIF: break
@@ -305,6 +342,17 @@ final class CaptureCoordinator {
         let recorder = ScreenGIFRecorder()
         gifRecorder = recorder
         onCaptureCancellationAvailabilityChanged?(true)
+        let panel = GIFRecordingPanelController(screen: screen, selectionRect: selectionRect)
+        panel.onCancel = { [weak self] in
+            self?.cancelGIFRecording()
+        }
+        panel.onStop = { [weak self] action in
+            self?.stopGIFRecording(action: action)
+        }
+        gifRecordingPanel = panel
+        // Both control windows must be visible when ScreenCaptureKit enumerates
+        // the windows to exclude, before the first frame is captured.
+        panel.present()
         gifPreparationTask = Task { [weak self] in
             do {
                 try await Task.sleep(for: .milliseconds(180))
@@ -315,6 +363,7 @@ final class CaptureCoordinator {
                 try await recorder.start(
                     screen: screen,
                     selectionRect: selectionRect,
+                    excludingWindowIDs: panel.recordingWindowIDs,
                     onStopRequested: { [weak self] in
                         self?.stopGIFRecording(action: .copy)
                     }
@@ -325,24 +374,16 @@ final class CaptureCoordinator {
                 }
                 self.gifPreparationTask = nil
                 self.isPreparingGIFRecording = false
-                let panel = GIFRecordingPanelController(
-                    screen: screen,
-                    selectionRect: selectionRect
-                )
-                panel.onCancel = { [weak self] in
-                    self?.cancelGIFRecording()
-                }
-                panel.onStop = { [weak self] action in
-                    self?.stopGIFRecording(action: action)
-                }
-                self.gifRecordingPanel = panel
-                panel.present()
+                panel.recordingDidStart()
             } catch {
                 guard let self, self.gifRecorder === recorder else { return }
                 self.gifPreparationTask = nil
                 recorder.cancel()
                 self.gifRecorder = nil
+                self.gifRecordingPanel?.finish()
+                self.gifRecordingPanel = nil
                 self.isPreparingGIFRecording = false
+                self.onShelfCaptureActivityChanged?(false)
                 self.onCaptureCancellationAvailabilityChanged?(false)
                 if !(error is CancellationError) {
                     self.presentCaptureError(error)
@@ -359,7 +400,8 @@ final class CaptureCoordinator {
         let completionPlan = GIFRecordingCompletionPlan(action: action)
         gifRecordingPanel?.showExporting()
         Task {
-            let data = await recorder.stop(style: shareStyle)
+            let data = await recorder.stop(style: shareStyle, borderSize: borderSize)
+            onShelfCaptureActivityChanged?(false)
             gifRecordingPanel?.finish()
             gifRecordingPanel = nil
             gifRecorder = nil
@@ -369,6 +411,7 @@ final class CaptureCoordinator {
                 presentGIFEncodingError()
                 return
             }
+            ShelfCoordinator.shared.hangGIF(data)
             if completionPlan.copiesToClipboard {
                 CaptureOutputService.copyGIF(data)
             }
@@ -420,6 +463,12 @@ final class CaptureCoordinator {
                     },
                     onStopRequested: { [weak self] in
                         self?.stopScrollingCapture(action: .copy)
+                    },
+                    onAlignmentLost: { [weak self] in
+                        self?.scrollingCapturePanel?.showAlignmentLost()
+                    },
+                    onManualScrollingRequired: { [weak self] in
+                        self?.scrollingCapturePanel?.showManualScrollingRequired()
                     }
                 )
                 guard scrollingCapture === capture else {
@@ -463,14 +512,14 @@ final class CaptureCoordinator {
             }
             switch action {
             case .copy:
-                let copiedImage = CaptureOutputService.copyScrollingCapture(image, style: shareStyle)
+                let copiedImage = CaptureOutputService.copyScrollingCapture(image, style: shareStyle, borderSize: borderSize)
                 rememberCapturedScreenshot(copiedImage)
             case .save:
-                if let savedImage = CaptureOutputService.saveScrollingCapture(image, style: shareStyle) {
+                if let savedImage = CaptureOutputService.saveScrollingCapture(image, style: shareStyle, borderSize: borderSize) {
                     rememberCapturedScreenshot(savedImage)
                 }
             case .pin:
-                let pinnedImage = CaptureOutputService.render(image, style: shareStyle)
+                let pinnedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
                 pinManager.pin(pinnedImage)
                 rememberCapturedScreenshot(pinnedImage)
             }
@@ -507,6 +556,7 @@ final class CaptureCoordinator {
         }
         captureHistory.record(data)
         historyPasteboardChangeCount = pasteboard.changeCount
+        ShelfCoordinator.shared.hang(image: image)
     }
 
     private func cancelScrollingCapture() {
@@ -528,6 +578,7 @@ final class CaptureCoordinator {
         gifRecordingPanel?.finish()
         gifRecordingPanel = nil
         isPreparingGIFRecording = false
+        onShelfCaptureActivityChanged?(false)
         onCaptureCancellationAvailabilityChanged?(false)
     }
 
@@ -545,7 +596,9 @@ final class CaptureCoordinator {
         dismissOverlay()
     }
 
-    private func dismissOverlay() {
+    private func dismissOverlay(preservingShelf: Bool = false) {
+        menuCaptureSession?.cancel()
+        menuCaptureSession = nil
         captureTask?.cancel()
         captureTask = nil
         captureTimeoutTask?.cancel()
@@ -555,6 +608,7 @@ final class CaptureCoordinator {
         captureSessionState.endCurrent()
         overlay?.close()
         overlay = nil
+        if !preservingShelf { onShelfCaptureActivityChanged?(false) }
     }
 
     private func screen(at point: NSPoint) -> NSScreen? {

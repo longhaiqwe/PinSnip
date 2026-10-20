@@ -3,6 +3,27 @@ import CoreText
 import Foundation
 
 public enum AnnotationRenderer {
+    nonisolated(unsafe) private static var fontCache: [CGFloat: CTFont] = [:]
+    nonisolated(unsafe) private static var boldFontCache: [CGFloat: CTFont] = [:]
+
+    private static func cachedFont(size: CGFloat) -> CTFont {
+        let size = max(8, size)
+        if let cached = fontCache[size] { return cached }
+        let font = CTFontCreateUIFontForLanguage(.system, size, nil)
+            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        fontCache[size] = font
+        return font
+    }
+
+    private static func cachedBoldFont(size: CGFloat) -> CTFont {
+        let size = max(8, size)
+        if let cached = boldFontCache[size] { return cached }
+        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, size, nil)
+            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, size, nil)
+        boldFontCache[size] = font
+        return font
+    }
+
     public static func render(baseImage: CGImage, annotations: [Annotation]) -> CGImage? {
         guard let context = CGContext(
             data: nil,
@@ -90,29 +111,8 @@ public enum AnnotationRenderer {
             }
             context.strokePath()
 
-        case let .arrow(from, to, color, width):
-            configure(context, color: color, width: width)
-            context.beginPath()
-            context.move(to: from)
-            context.addLine(to: to)
-            context.strokePath()
-
-            let angle = atan2(to.y - from.y, to.x - from.x)
-            let headLength = max(10, width * 4)
-            let spread = CGFloat.pi / 7
-            let left = CGPoint(
-                x: to.x - headLength * cos(angle - spread),
-                y: to.y - headLength * sin(angle - spread)
-            )
-            let right = CGPoint(
-                x: to.x - headLength * cos(angle + spread),
-                y: to.y - headLength * sin(angle + spread)
-            )
-            context.beginPath()
-            context.move(to: left)
-            context.addLine(to: to)
-            context.addLine(to: right)
-            context.strokePath()
+        case let .arrow(from, to, color, width, style):
+            drawArrow(from: from, to: to, color: color, width: width, style: style, in: context)
 
         case let .text(rect, text, color, fontSize):
             drawText(text, rect: rect, color: color, fontSize: fontSize, in: context)
@@ -151,6 +151,58 @@ public enum AnnotationRenderer {
         }
     }
 
+    /// Shared by the live overlay, style thumbnails and exported image.
+    public static func drawArrow(
+        from: CGPoint, to: CGPoint, color: RGBAColor, width: CGFloat,
+        style: ArrowAnnotationStyle, in context: CGContext
+    ) {
+        let length = hypot(to.x - from.x, to.y - from.y)
+        guard length.isFinite, length > 0, width.isFinite, width > 0 else { return }
+        context.saveGState()
+        defer { context.restoreGState() }
+        configure(context, color: color, width: width)
+        context.setLineCap(.round)
+        context.setLineJoin(.round)
+        let ux = (to.x - from.x) / length
+        let uy = (to.y - from.y) / length
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: from.x + ux * x - uy * y, y: from.y + uy * x + ux * y)
+        }
+        context.beginPath()
+        if style == .line {
+            let headLength = min(width * 4, length * 0.6)
+            let spread = CGFloat.pi / 7
+            context.move(to: from)
+            context.addLine(to: to)
+            context.move(to: point(length - headLength * cos(spread), headLength * sin(spread)))
+            context.addLine(to: to)
+            context.addLine(to: point(length - headLength * cos(spread), -headLength * sin(spread)))
+            context.strokePath()
+            return
+        }
+
+        // Scale the entire silhouette for short drags, retaining an open interior.
+        let unit = min(width, length / 10)
+        let shaft = unit * 1.5
+        let head = unit * 4
+        let neck = length - unit * 7
+        context.move(to: point(0, shaft))
+        context.addLine(to: point(neck, shaft))
+        context.addLine(to: point(neck, head))
+        context.addLine(to: to)
+        context.addLine(to: point(neck, -head))
+        context.addLine(to: point(neck, -shaft))
+        context.addLine(to: point(0, -shaft))
+        context.closePath()
+        if style == .hollow {
+            context.setLineWidth(unit * 0.65)
+            context.strokePath()
+        } else {
+            context.setFillColor(cgColor(color))
+            context.fillPath()
+        }
+    }
+
     public static func drawText(
         _ text: String,
         rect: CGRect,
@@ -159,9 +211,7 @@ public enum AnnotationRenderer {
         in context: CGContext
     ) {
         guard !text.isEmpty else { return }
-        let size = max(8, fontSize)
-        let font = CTFontCreateUIFontForLanguage(.system, size, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        let font = cachedFont(size: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String): cgColor(color)
@@ -187,9 +237,7 @@ public enum AnnotationRenderer {
         width: CGFloat,
         fontSize: CGFloat
     ) -> CGFloat {
-        let size = max(8, fontSize)
-        let font = CTFontCreateUIFontForLanguage(.system, size, nil)
-            ?? CTFontCreateWithName("Helvetica" as CFString, size, nil)
+        let font = cachedFont(size: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font
         ]
@@ -209,7 +257,7 @@ public enum AnnotationRenderer {
         let verticalInsets = TextAnnotationLayout.verticalTextInset * 2
         return max(
             ceil(suggested.height + verticalInsets),
-            ceil(size * 1.25 + verticalInsets)
+            ceil(max(8, fontSize) * 1.25 + verticalInsets)
         )
     }
 
@@ -233,8 +281,7 @@ public enum AnnotationRenderer {
         let digits = String(value)
         let fontScale: CGFloat = digits.count >= 3 ? 0.38 : digits.count == 2 ? 0.45 : 0.52
         let fontSize = diameter * fontScale
-        let font = CTFontCreateUIFontForLanguage(.emphasizedSystem, fontSize, nil)
-            ?? CTFontCreateWithName("Helvetica-Bold" as CFString, fontSize, nil)
+        let font = cachedBoldFont(size: fontSize)
         let attributes: [NSAttributedString.Key: Any] = [
             NSAttributedString.Key(kCTFontAttributeName as String): font,
             NSAttributedString.Key(kCTForegroundColorAttributeName as String):

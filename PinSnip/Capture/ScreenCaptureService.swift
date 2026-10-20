@@ -29,6 +29,21 @@ final class SystemScreenCapturePermissionProvider: ScreenCapturePermissionProvid
 @MainActor
 final class ScreenCaptureService {
     func capture(_ screen: NSScreen) async throws -> CGImage {
+        try await captureOperation(for: screen)()
+    }
+
+    /// Read AppKit display properties on the main actor, then allow capture to run
+    /// independently of AppKit's nested menu event loop.
+    func captureOperation(for screen: NSScreen) -> @Sendable () async throws -> CGImage {
+        let frame = screen.frame
+        let scale = screen.backingScaleFactor
+        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        return {
+            try await Self.capture(frame: frame, scale: scale, displayID: displayID)
+        }
+    }
+
+    nonisolated private static func capture(frame: CGRect, scale: CGFloat, displayID: CGDirectDisplayID?) async throws -> CGImage {
         let supportsConfiguredRectangleCapture: Bool
         if #available(macOS 26.0, *) {
             supportsConfiguredRectangleCapture = true
@@ -41,11 +56,11 @@ final class ScreenCaptureService {
         ) {
         case .configuredRectangle:
             if #available(macOS 26.0, *) {
-                return try await captureConfiguredRectangle(screen)
+                return try await captureConfiguredRectangle(frame: frame, scale: scale)
             }
-            return try await captureFilteredDisplay(screen)
+            return try await captureFilteredDisplay(displayID: displayID, frame: frame, scale: scale)
         case .filteredDisplay:
-            return try await captureFilteredDisplay(screen)
+            return try await captureFilteredDisplay(displayID: displayID, frame: frame, scale: scale)
         }
     }
 
@@ -79,15 +94,15 @@ final class ScreenCaptureService {
     }
 
     @available(macOS 26.0, *)
-    private func captureConfiguredRectangle(_ screen: NSScreen) async throws -> CGImage {
+    nonisolated private static func captureConfiguredRectangle(frame: CGRect, scale: CGFloat) async throws -> CGImage {
         let configuration = SCScreenshotConfiguration()
-        configuration.width = Int(screen.frame.width * screen.backingScaleFactor)
-        configuration.height = Int(screen.frame.height * screen.backingScaleFactor)
+        configuration.width = Int(frame.width * scale)
+        configuration.height = Int(frame.height * scale)
         configuration.showsCursor = CaptureCursorPolicy.staticScreenshotShowsCursor
         configuration.dynamicRange = .sdr
         configuration.displayIntent = .local
         let output = try await SCScreenshotManager.captureScreenshot(
-            rect: screen.frame,
+            rect: frame,
             configuration: configuration
         )
         guard let image = output.sdrImage else {
@@ -96,16 +111,16 @@ final class ScreenCaptureService {
         return image
     }
 
-    private func captureFilteredDisplay(_ screen: NSScreen) async throws -> CGImage {
+    nonisolated private static func captureFilteredDisplay(displayID: CGDirectDisplayID?, frame: CGRect, scale: CGFloat) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
-        guard let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+        guard let displayID,
               let display = content.displays.first(where: { $0.displayID == displayID })
         else { throw ScreenCaptureError.displayUnavailable }
 
         let filter = SCContentFilter(display: display, excludingWindows: [])
         let configuration = SCStreamConfiguration()
-        configuration.width = Int(screen.frame.width * screen.backingScaleFactor)
-        configuration.height = Int(screen.frame.height * screen.backingScaleFactor)
+        configuration.width = Int(frame.width * scale)
+        configuration.height = Int(frame.height * scale)
         configuration.scalesToFit = false
         configuration.showsCursor = CaptureCursorPolicy.staticScreenshotShowsCursor
         configuration.pixelFormat = kCVPixelFormatType_32BGRA

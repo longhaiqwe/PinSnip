@@ -3,6 +3,98 @@ import XCTest
 @testable import PinSnipCore
 
 final class AnnotationRendererTests: XCTestCase {
+    func testHollowArrowPreservesBackgroundInsideShaftAndHead() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 200, height: 100, red: 12, green: 130, blue: 220))
+        let rendered = try XCTUnwrap(AnnotationRenderer.render(baseImage: base, annotations: [
+            .arrow(from: CGPoint(x: 20, y: 50), to: CGPoint(x: 180, y: 50),
+                   RGBAColor(red: 1, green: 0, blue: 0), 3, style: .hollow)
+        ]))
+        for x in [60, 165] {
+            let interior = try XCTUnwrap(pixel(in: rendered, x: x, y: 50))
+            XCTAssertEqual(interior.red, 12, accuracy: 1)
+            XCTAssertEqual(interior.green, 130, accuracy: 1)
+            XCTAssertEqual(interior.blue, 220, accuracy: 1)
+        }
+        let outline = try XCTUnwrap(pixel(in: rendered, x: 60, y: 45))
+        XCTAssertGreaterThan(outline.red, 230)
+        XCTAssertLessThan(outline.blue, 25)
+    }
+
+    func testFilledArrowHasOpaqueShaftAndZeroLengthArrowDrawsNothing() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 200, height: 100, red: 12, green: 130, blue: 220))
+        for style in ArrowAnnotationStyle.allCases {
+            let empty = try XCTUnwrap(AnnotationRenderer.render(baseImage: base, annotations: [
+                .arrow(from: CGPoint(x: 60, y: 50), to: CGPoint(x: 60, y: 50), .white, 3, style: style)
+            ]))
+            let center = try XCTUnwrap(pixel(in: empty, x: 60, y: 50))
+            XCTAssertEqual(center.red, 12)
+            XCTAssertEqual(center.blue, 220)
+        }
+        let filled = try XCTUnwrap(AnnotationRenderer.render(baseImage: base, annotations: [
+            .arrow(from: CGPoint(x: 20, y: 50), to: CGPoint(x: 180, y: 50), .white, 3, style: .filled)
+        ]))
+        XCTAssertEqual(try XCTUnwrap(pixel(in: filled, x: 60, y: 50)).red, 255)
+    }
+
+    func testArrowStylesSurviveCropAndScale() {
+        for style in ArrowAnnotationStyle.allCases {
+            let annotation = Annotation.arrow(from: CGPoint(x: 30, y: 40), to: CGPoint(x: 80, y: 90),
+                                              .white, 3, style: style)
+            XCTAssertEqual(annotation.mapped(relativeTo: CGPoint(x: 10, y: 20), scale: 2),
+                           .arrow(from: CGPoint(x: 40, y: 40), to: CGPoint(x: 140, y: 140),
+                                  .white, 6, style: style))
+        }
+    }
+
+    func testCustomPaddingAppliesToBothBordersAndPreservesScreenshotPixels() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, red: 12, green: 130, blue: 220))
+        for style in [ShareStyle.bordered, .dusk] {
+            for padding in [8, 73, 300] {
+                let rendered = try XCTUnwrap(ShareCardRenderer.render(
+                    baseImage: base, style: style, borderSize: ShareBorderSize(pixels: padding)
+                ))
+                XCTAssertEqual(rendered.width, 80 + padding * 2)
+                XCTAssertEqual(rendered.height, 60 + padding * 2)
+                let center = try XCTUnwrap(pixel(in: rendered, x: padding + 40, y: padding + 30))
+                XCTAssertEqual(center.red, 12, accuracy: 2)
+                XCTAssertEqual(center.green, 130, accuracy: 2)
+                XCTAssertEqual(center.blue, 220, accuracy: 2)
+                XCTAssertEqual(try XCTUnwrap(pixel(in: rendered, x: 0, y: 0)).alpha, 255)
+            }
+        }
+    }
+
+    func testDuskBackgroundDoesNotChangeWithScreenshotColors() throws {
+        let red = try XCTUnwrap(makeSolidImage(width: 160, height: 100, red: 255, green: 0, blue: 0))
+        let blue = try XCTUnwrap(makeSolidImage(width: 160, height: 100, red: 0, green: 0, blue: 255))
+        let first = try XCTUnwrap(ShareCardRenderer.render(baseImage: red, style: .dusk))
+        let second = try XCTUnwrap(ShareCardRenderer.render(baseImage: blue, style: .dusk))
+        for point in [(4, 4), (first.width - 5, 4), (first.width / 2, first.height - 5)] {
+            let a = try XCTUnwrap(pixel(in: first, x: point.0, y: point.1))
+            let b = try XCTUnwrap(pixel(in: second, x: point.0, y: point.1))
+            XCTAssertEqual(a.red, b.red)
+            XCTAssertEqual(a.green, b.green)
+            XCTAssertEqual(a.blue, b.blue)
+            XCTAssertEqual(a.alpha, 255)
+        }
+        let left = try XCTUnwrap(pixel(in: first, x: 4, y: first.height / 2))
+        let top = try XCTUnwrap(pixel(in: first, x: first.width * 2 / 3, y: 4))
+        XCTAssertGreaterThan(left.blue, left.red)
+        XCTAssertGreaterThan(top.red, top.blue)
+    }
+
+    func testBorderSizeDoesNotChangeOriginalOrPaperCutDimensions() throws {
+        let base = try XCTUnwrap(makeSolidImage(width: 80, height: 60, gray: 1))
+        for style in [ShareStyle.original, .paperCut] {
+            let automatic = try XCTUnwrap(ShareCardRenderer.render(baseImage: base, style: style))
+            let custom = try XCTUnwrap(ShareCardRenderer.render(
+                baseImage: base, style: style, borderSize: ShareBorderSize(pixels: 100)
+            ))
+            XCTAssertEqual(custom.width, automatic.width)
+            XCTAssertEqual(custom.height, automatic.height)
+        }
+    }
+
     func testRenderingPreservesTransparentWindowCorners() throws {
         let base = try XCTUnwrap(makeImageWithTransparentCorners(width: 40, height: 30))
 

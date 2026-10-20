@@ -11,6 +11,7 @@ public enum AppCommand: Equatable, Sendable {
     case checkForUpdates
     case toggleAutomaticUpdateChecks
     case toggleAutomaticUpdateDownloads
+    case toggleLaunchAtLogin
 }
 
 @MainActor

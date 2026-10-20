@@ -8,7 +8,7 @@ final class GIFRecordingPanelController: NSWindowController {
     private let saveButton: NSButton
     private let copyButton: NSButton
     private let borderController: GIFRecordingBorderController
-    private let startedAt = Date()
+    private var startedAt = Date()
     private var timer: Timer?
     private var stopRequested = false
     var onCancel: (() -> Void)?
@@ -140,9 +140,26 @@ final class GIFRecordingPanelController: NSWindowController {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+    var recordingWindowIDs: Set<CGWindowID> {
+        Set([window, borderController.window].compactMap { window in
+            guard let number = window?.windowNumber, number > 0 else { return nil }
+            return CGWindowID(number)
+        })
+    }
+
     func present() {
+        statusLabel.stringValue = "正在准备录制…"
+        saveButton.isEnabled = false
+        copyButton.isEnabled = false
         borderController.present()
         window?.orderFrontRegardless()
+    }
+
+    func recordingDidStart() {
+        startedAt = Date()
+        saveButton.isEnabled = true
+        copyButton.isEnabled = true
+        updateElapsedTime()
         let timer = Timer(
             timeInterval: 0.2,
             target: self,
@@ -229,6 +246,8 @@ final class GIFRecordingPanelController: NSWindowController {
             accessibilityDescription: help
         )
         button.imagePosition = .imageLeading
+        button.imageHugsTitle = true
+        button.alignment = .center
         button.bezelStyle = .rounded
         button.controlSize = .small
         button.toolTip = help

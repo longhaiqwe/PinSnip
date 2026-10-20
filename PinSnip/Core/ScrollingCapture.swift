@@ -71,6 +71,21 @@ public enum ScrollingCaptureControlState: Equatable, Sendable {
     }
 }
 
+public enum ScrollingCaptureScrollPlan {
+    public static func step(selectionHeight: CGFloat) -> Int {
+        Int(max(1, min(320, selectionHeight * 0.35)))
+    }
+
+    public static func pulses(distance: Int) -> [Int] {
+        guard distance != 0 else { return [] }
+        let magnitude = abs(distance)
+        let count = min(3, magnitude)
+        return (0..<count).map { index in
+            (distance < 0 ? -1 : 1) * (magnitude / count + (index < magnitude % count ? 1 : 0))
+        }
+    }
+}
+
 public enum ScrollingFrameAnalyzer {
     private static let unchangedThreshold = 0.004
     private static let matchedThreshold = 0.08
@@ -79,68 +94,66 @@ public enum ScrollingFrameAnalyzer {
         previous: ScrollingCaptureFrame,
         current: ScrollingCaptureFrame
     ) -> ScrollingFrameAnalysis {
-        guard previous.width == current.width,
-              previous.height == current.height
-        else { return .unmatched }
+        alignment(previous: previous, current: current).analysis
+    }
 
-        let height = previous.height
-        let topInset = max(2, Int(Double(height) * 0.12))
-        let bottomInset = max(2, Int(Double(height) * 0.06))
-        let unchangedEnd = height - bottomInset
-        guard unchangedEnd > topInset else { return .unmatched }
+    /// Locate the moving viewport from the frames instead of assuming fixed header/footer ratios.
+    static func alignment(previous: ScrollingCaptureFrame, current: ScrollingCaptureFrame)
+        -> (analysis: ScrollingFrameAnalysis, scrollingRows: Range<Int>) {
+        let fullRange = 0..<previous.height
+        guard previous.width == current.width, previous.height == current.height else {
+            return (.unmatched, fullRange)
+        }
         let columns = sampledColumns(width: previous.width)
-
-        let unchangedScore = score(
-            previous: previous,
-            current: current,
-            offset: 0,
-            rowRange: topInset..<unchangedEnd,
-            columns: columns,
-            retainedRatio: 1
-        )
-        if unchangedScore <= unchangedThreshold {
-            return .unchanged
-        }
+        let unchangedScore = score(previous: previous, current: current, offset: 0,
+                                   rowRange: fullRange, columns: columns, retainedRatio: 1)
+        if unchangedScore == 0 { return (.unchanged, fullRange) }
         let changingColumns = columns.filter { x in
-            columnScore(
-                previous: previous,
-                current: current,
-                offset: 0,
-                rowRange: topInset..<unchangedEnd,
-                x: x
-            ) > 0.015
+            columnScore(previous: previous, current: current, offset: 0,
+                        rowRange: fullRange, x: x) > 0.015
         }
-        let matchingColumns = changingColumns.count >= 2
-            ? changingColumns
-            : columns
+        let matchingColumns = changingColumns.count >= 2 ? changingColumns : columns
+        let changingRows = fullRange.filter { y in
+            score(previous: previous, current: current, offset: 0, rowRange: y..<(y + 1),
+                  columns: matchingColumns, retainedRatio: 1) > 0.001
+        }
+        guard let first = changingRows.first, let last = changingRows.last else {
+            return (.unchanged, fullRange)
+        }
+        let scrollingRows = first..<(last + 1)
+        let minimumOverlap = max(1, min(8, scrollingRows.count / 2),
+                                 Int(Double(scrollingRows.count) * 0.18))
+        let maximumOffset = scrollingRows.count - minimumOverlap
+        guard maximumOffset >= 1 else { return (.unmatched, scrollingRows) }
 
-        let minimumOverlap = max(8, Int(Double(height) * 0.18))
-        let maximumOffset = height - topInset - bottomInset - minimumOverlap
-        guard maximumOffset >= 2 else { return .unmatched }
-
+        var candidateScores: [(offset: Int, score: Double)] = []
         var bestOffset = 0
         var bestScore = Double.greatestFiniteMagnitude
-        for offset in 2...maximumOffset {
-            let end = height - bottomInset - offset
-            guard end > topInset else { continue }
-            let candidateScore = score(
-                previous: previous,
-                current: current,
-                offset: offset,
-                rowRange: topInset..<end,
-                columns: matchingColumns,
-                retainedRatio: 0.8
-            )
+        for offset in 1...maximumOffset {
+            let candidateScore = score(previous: previous, current: current, offset: offset,
+                rowRange: first..<(last + 1 - offset), columns: matchingColumns, retainedRatio: 0.8)
+            candidateScores.append((offset, candidateScore))
             if candidateScore < bestScore {
                 bestScore = candidateScore
                 bestOffset = offset
             }
         }
-
-        guard bestOffset > 0, bestScore <= matchedThreshold else {
-            return .unmatched
+        // A one-pixel translation can have a tiny mean difference; try alignment before
+        // treating small differences as capture noise.
+        if unchangedScore <= unchangedThreshold && bestScore >= unchangedScore * 0.5 {
+            return (.unchanged, scrollingRows)
         }
-        return .scrolled(pixelOffset: bestOffset)
+        guard bestOffset > 0, bestScore <= matchedThreshold else {
+            return (.unmatched, scrollingRows)
+        }
+        // Repeated rows can match several distances exactly. Guessing the distance
+        // silently removes complete repeats; let the capture loop retry a smaller move.
+        if candidateScores.contains(where: {
+            abs($0.offset - bestOffset) > 2 && $0.score <= bestScore + 0.0005
+        }) {
+            return (.unmatched, scrollingRows)
+        }
+        return (.scrolled(pixelOffset: bestOffset), scrollingRows)
     }
 
     private static func score(
@@ -186,7 +199,9 @@ public enum ScrollingFrameAnalyzer {
         rowRange: Range<Int>,
         x: Int
     ) -> Double {
-        let yStride = max(1, rowRange.count / 180)
+        // Never skip rows when deciding whether anything moved: a thin line can
+        // translate one pixel entirely between the coarse offset-search samples.
+        let yStride = offset == 0 ? 1 : max(1, rowRange.count / 180)
         var difference = 0
         var channelCount = 0
         for y in stride(
@@ -225,6 +240,30 @@ public enum ScrollingCaptureAppendResult: Equatable, Sendable {
     case reachedLimit(totalPixelHeight: Int)
 }
 
+/// No movement cannot distinguish a page bottom from an ignored scroll event.
+/// Yield to manual scrolling instead of exporting a potentially incomplete image.
+public struct ScrollingCaptureAutomaticProgress {
+    private var unchangedAttempts = 0
+    private var requiresManualScrolling = false
+
+    public init() {}
+
+    /// Returns true once automatic scrolling should yield to the user.
+    public mutating func observe(
+        _ result: ScrollingCaptureAppendResult,
+        isForwardAttempt: Bool
+    ) -> Bool {
+        guard !requiresManualScrolling else { return true }
+        if isForwardAttempt, case .unchanged = result {
+            unchangedAttempts += 1
+            requiresManualScrolling = unchangedAttempts >= 2
+        } else {
+            unchangedAttempts = 0
+        }
+        return requiresManualScrolling
+    }
+}
+
 public final class ScrollingCaptureAssembler {
     private let maximumPixelCount: Int
     private var width = 0
@@ -252,7 +291,8 @@ public final class ScrollingCaptureAssembler {
             return .started(totalPixelHeight: totalHeight)
         }
 
-        switch ScrollingFrameAnalyzer.analyze(previous: previousFrame, current: frame) {
+        let alignment = ScrollingFrameAnalyzer.alignment(previous: previousFrame, current: frame)
+        switch alignment.analysis {
         case .unchanged:
             return .unchanged(totalPixelHeight: totalHeight)
         case .unmatched:
@@ -263,7 +303,11 @@ public final class ScrollingCaptureAssembler {
             else {
                 return .reachedLimit(totalPixelHeight: totalHeight)
             }
-            let appendedByteCount = pixelOffset * width * 4
+            // Replace the previous fixed footer with new content and the latest footer.
+            // Keeping the old footer here inserts a separator at every stitched frame.
+            let footerHeight = frame.height - alignment.scrollingRows.upperBound
+            removeTrailingBytes(footerHeight * width * 4)
+            let appendedByteCount = (pixelOffset + footerHeight) * width * 4
             pixelSegments.append(Array(frame.rgbaPixels.suffix(appendedByteCount)))
             totalHeight += pixelOffset
             self.previousFrame = frame
@@ -271,6 +315,19 @@ public final class ScrollingCaptureAssembler {
                 pixelHeight: pixelOffset,
                 totalPixelHeight: totalHeight
             )
+        }
+    }
+
+    private func removeTrailingBytes(_ count: Int) {
+        var remaining = count
+        while remaining > 0, let last = pixelSegments.last {
+            if last.count <= remaining {
+                remaining -= last.count
+                pixelSegments.removeLast()
+            } else {
+                pixelSegments[pixelSegments.count - 1].removeLast(remaining)
+                remaining = 0
+            }
         }
     }
 

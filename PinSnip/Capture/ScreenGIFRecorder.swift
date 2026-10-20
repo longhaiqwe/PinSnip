@@ -25,24 +25,26 @@ final class ScreenGIFRecorder {
     func start(
         screen: NSScreen,
         selectionRect: CGRect,
+        excludingWindowIDs: Set<CGWindowID> = [],
         onStopRequested: @escaping () -> Void
     ) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
             onScreenWindowsOnly: true
         )
+        try Task.checkCancellation()
         guard let displayID = screen.deviceDescription[
             NSDeviceDescriptionKey("NSScreenNumber")
         ] as? CGDirectDisplayID,
               let display = content.displays.first(where: { $0.displayID == displayID })
         else { throw ScreenCaptureError.displayUnavailable }
 
-        let ownProcessID = ProcessInfo.processInfo.processIdentifier
-        let ownApplications = content.applications.filter { $0.processID == ownProcessID }
+        // Exclude only recording controls. Excluding the whole process also
+        // removes the shelf, pins, and any windows opened during recording.
+        let excludedWindows = content.windows.filter { excludingWindowIDs.contains($0.windowID) }
         let filter = SCContentFilter(
             display: display,
-            excludingApplications: ownApplications,
-            exceptingWindows: []
+            excludingWindows: excludedWindows
         )
         let geometry = ScreenRecordingGeometry(
             screenSize: screen.frame.size,
@@ -65,13 +67,14 @@ final class ScreenGIFRecorder {
         let start = Date.timeIntervalSinceReferenceDate
         startedAt = start
         try await captureFrame(at: start)
+        try Task.checkCancellation()
 
         captureTask = Task { @MainActor [weak self] in
             await self?.captureLoop()
         }
     }
 
-    func stop(style: ShareStyle) async -> Data? {
+    func stop(style: ShareStyle, borderSize: ShareBorderSize = .automatic) async -> Data? {
         let task = captureTask
         captureTask = nil
         task?.cancel()
@@ -93,7 +96,8 @@ final class ScreenGIFRecorder {
         let frames = capturedFrames
         let data = AnimatedGIFEncoder.encodeRecording(
             frameCount: frames.count,
-            style: style
+            style: style,
+            borderSize: borderSize
         ) { index in
             guard let source = CGImageSourceCreateWithData(frames[index].pngData as CFData, nil),
                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
@@ -122,6 +126,7 @@ final class ScreenGIFRecorder {
             do {
                 try await captureFrame(at: timestamp)
             } catch {
+                guard !Task.isCancelled else { return }
                 onStopRequested?()
                 return
             }
@@ -134,6 +139,7 @@ final class ScreenGIFRecorder {
             contentFilter: filter,
             configuration: configuration
         )
+        try Task.checkCancellation()
         guard let pngData = Self.pngData(for: image) else { return }
         capturedFrames.append(CapturedFrame(pngData: pngData, timestamp: timestamp))
     }

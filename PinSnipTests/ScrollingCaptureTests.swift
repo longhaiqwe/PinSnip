@@ -2,6 +2,36 @@ import XCTest
 @testable import PinSnipCore
 
 final class ScrollingCaptureTests: XCTestCase {
+    func testAutomaticCaptureWaitsForManualScrollingWhenFirstAttemptsDoNotMove() {
+        var progress = ScrollingCaptureAutomaticProgress()
+        XCTAssertFalse(progress.observe(.unchanged(totalPixelHeight: 60), isForwardAttempt: true))
+        XCTAssertTrue(progress.observe(.unchanged(totalPixelHeight: 60), isForwardAttempt: true))
+        // Waiting may last indefinitely, and manual scrolling must remain possible.
+        XCTAssertTrue(progress.observe(.unchanged(totalPixelHeight: 60), isForwardAttempt: false))
+        XCTAssertTrue(progress.observe(.appended(pixelHeight: 20, totalPixelHeight: 80), isForwardAttempt: false))
+    }
+
+    func testAutomaticCapturePauseAfterProgressRequiresUserCompletion() {
+        var progress = ScrollingCaptureAutomaticProgress()
+        XCTAssertFalse(progress.observe(.appended(pixelHeight: 20, totalPixelHeight: 80), isForwardAttempt: true))
+        XCTAssertFalse(progress.observe(.unchanged(totalPixelHeight: 80), isForwardAttempt: true))
+        XCTAssertTrue(progress.observe(.unchanged(totalPixelHeight: 80), isForwardAttempt: true))
+    }
+
+    func testRecoveryAndSuccessfulAppendResetNoMovementCount() {
+        for resetResult: ScrollingCaptureAppendResult in [
+            .unchanged(totalPixelHeight: 60),
+            .unmatched(totalPixelHeight: 60),
+            .appended(pixelHeight: 20, totalPixelHeight: 80),
+        ] {
+            var progress = ScrollingCaptureAutomaticProgress()
+            XCTAssertFalse(progress.observe(.unchanged(totalPixelHeight: 60), isForwardAttempt: true))
+            XCTAssertFalse(progress.observe(resetResult, isForwardAttempt: false))
+            XCTAssertFalse(progress.observe(.unchanged(totalPixelHeight: 80), isForwardAttempt: true))
+            XCTAssertTrue(progress.observe(.unchanged(totalPixelHeight: 80), isForwardAttempt: true))
+        }
+    }
+
     func testPreparingControlsAllowCancellationButNotOutput() {
         XCTAssertTrue(ScrollingCaptureControlState.preparing.allowsCancellation)
         XCTAssertFalse(ScrollingCaptureControlState.preparing.allowsOutput)
@@ -140,6 +170,82 @@ final class ScrollingCaptureTests: XCTestCase {
             .reachedLimit(totalPixelHeight: 60)
         )
         XCTAssertEqual(assembler.makeImage()?.height, 60)
+    }
+
+    func testKeepsFixedFooterOnlyOnceWithoutLosingContentRows() throws {
+        let footer = Array(240..<248)
+        let assembler = ScrollingCaptureAssembler()
+        _ = assembler.append(try image(rows: Array(0..<52) + footer))
+        _ = assembler.append(try image(rows: Array(20..<72) + footer))
+        _ = assembler.append(try image(rows: Array(40..<92) + footer))
+        let result = try XCTUnwrap(assembler.makeImage())
+        XCTAssertEqual(result.height, 100)
+        let actual = try XCTUnwrap(ScrollingCaptureFrame(image: result))
+        let rows = (0..<result.height).map { Int(actual.rgbaPixels[$0 * actual.width * 4]) }
+        XCTAssertEqual(rows, Array(0..<92) + footer)
+    }
+
+    func testTallFixedHeaderDoesNotCorruptMatching() {
+        let header = Array(repeating: 240, count: 40)
+        XCTAssertEqual(ScrollingFrameAnalyzer.analyze(
+            previous: frame(rows: header + Array(0..<60)),
+            current: frame(rows: header + Array(25..<85))), .scrolled(pixelOffset: 25))
+    }
+
+    func testPreservesASinglePixelScroll() throws {
+        let assembler = ScrollingCaptureAssembler()
+        _ = assembler.append(try image(rows: Array(0..<60)))
+        XCTAssertEqual(assembler.append(try image(rows: Array(1..<61))),
+                       .appended(pixelHeight: 1, totalPixelHeight: 61))
+        let result = try XCTUnwrap(assembler.makeImage())
+        XCTAssertEqual(try rowValue(in: result, y: result.height - 1), 60)
+    }
+
+    func testMatchesLargeScrollWhenSelectionIsShorterThanViewport() {
+        XCTAssertEqual(ScrollingFrameAnalyzer.analyze(previous: frame(rows: Array(0..<60)),
+            current: frame(rows: Array(45..<105))), .scrolled(pixelOffset: 45))
+    }
+
+    func testRejectsAmbiguousRepeatedRowsRatherThanDroppingWholeRepeats() {
+        XCTAssertEqual(ScrollingFrameAnalyzer.analyze(
+            previous: frame(rows: (0..<90).map { $0 % 9 }),
+            current: frame(rows: (3..<93).map { $0 % 9 })), .unmatched)
+    }
+
+    func testPreservesBlankRowsBeforeFooterAcrossUnevenScrolls() throws {
+        let header = Array(230..<244)
+        let footer = Array(245..<250)
+        let content = Array(0..<35) + Array(repeating: 220, count: 28) + Array(63..<180)
+        let assembler = ScrollingCaptureAssembler()
+        for offset in [0, 13, 14, 32] {
+            _ = assembler.append(try image(rows: header + Array(content[offset..<(offset + 70)]) + footer))
+        }
+        let result = try XCTUnwrap(assembler.makeImage())
+        let actual = try XCTUnwrap(ScrollingCaptureFrame(image: result))
+        let rows = (0..<result.height).map { Int(actual.rgbaPixels[$0 * actual.width * 4]) }
+        XCTAssertEqual(rows, header + Array(content[0..<102]) + footer)
+    }
+
+    func testShortSelectionsKeepEnoughOverlapInsteadOfForcingAn80PointJump() {
+        XCTAssertLessThanOrEqual(ScrollingCaptureScrollPlan.step(selectionHeight: 20), 7)
+        XCTAssertGreaterThanOrEqual(ScrollingCaptureScrollPlan.step(selectionHeight: 3), 1)
+    }
+
+    func testScrollPulsesPreserveExactDistanceIncludingRecovery() {
+        for distance in [1, 2, 5, 80, -1, -7] {
+            let pulses = ScrollingCaptureScrollPlan.pulses(distance: distance)
+            XCTAssertEqual(pulses.reduce(0, +), distance)
+            XCTAssertTrue(pulses.allSatisfy { distance > 0 ? $0 > 0 : $0 < 0 })
+        }
+    }
+
+    func testSinglePixelMovementOfASparseLineIsNotSkippedByRowSampling() {
+        var previousRows = Array(repeating: 240, count: 600)
+        var currentRows = previousRows
+        previousRows[101] = 0
+        currentRows[100] = 0
+        XCTAssertEqual(ScrollingFrameAnalyzer.analyze(previous: frame(rows: previousRows),
+            current: frame(rows: currentRows)), .scrolled(pixelOffset: 1))
     }
 
     private func frame(rows: [Int], width: Int = 24) -> ScrollingCaptureFrame {

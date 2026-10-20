@@ -80,21 +80,24 @@ public enum AnimatedGIFEncoder {
     public static func encodeRecording(
         frames: [AnimatedImage.Frame],
         loopCount: Int = 0,
-        style: ShareStyle = .paperCut
+        style: ShareStyle = .paperCut,
+        borderSize: ShareBorderSize = .automatic
     ) -> Data? {
-        encodeRecording(frameCount: frames.count, loopCount: loopCount, style: style) { frames[$0] }
+        encodeRecording(frameCount: frames.count, loopCount: loopCount, style: style, borderSize: borderSize) { frames[$0] }
     }
 
     public static func encodeRecording(
         frameCount: Int,
         loopCount: Int = 0,
         style: ShareStyle = .paperCut,
+        borderSize: ShareBorderSize = .automatic,
         frameProvider: (Int) -> AnimatedImage.Frame?
     ) -> Data? {
         encodeStyled(
             frameCount: frameCount,
             loopCount: loopCount,
             style: style,
+            borderSize: borderSize,
             frameProvider: frameProvider
         )
     }
@@ -115,6 +118,7 @@ public enum AnimatedGIFEncoder {
             frameCount: frameCount,
             loopCount: loopCount,
             style: .paperCut,
+            borderSize: .automatic,
             frameProvider: frameProvider
         )
     }
@@ -123,13 +127,15 @@ public enum AnimatedGIFEncoder {
         frameCount: Int,
         loopCount: Int,
         style: ShareStyle,
+        borderSize: ShareBorderSize,
         frameProvider: (Int) -> AnimatedImage.Frame?
     ) -> Data? {
         guard frameCount > 1,
               let firstFrame = frameProvider(0),
               let template = ShareCardRenderer.Template(
                 styleSource: firstFrame.image,
-                style: style
+                style: style,
+                borderSize: borderSize
               )
         else { return nil }
 

@@ -3,6 +3,50 @@ import XCTest
 @testable import PinSnipCore
 
 final class AnnotationTransformTests: XCTestCase {
+    func testNewTextStartsAtClickAndCentersFirstLineVertically() {
+        let rect = TextAnnotationLayout.initialRect(at: CGPoint(x: 200, y: 150),
+            inside: CGRect(x: 0, y: 0, width: 800, height: 600),
+            preferredWidth: 160, minimumWidth: 48, height: 32)
+        XCTAssertEqual(rect.minX + TextAnnotationLayout.horizontalTextInset, 200)
+        XCTAssertEqual(rect.midY, 150)
+    }
+
+    func testTextControlsHaveDistinctBodyBorderAndResizeTargets() {
+        let rect = CGRect(x: 100, y: 200, width: 160, height: 32)
+        XCTAssertEqual(TextAnnotationLayout.hitTarget(at: CGPoint(x: 180, y: 216), in: rect), .text)
+        XCTAssertEqual(TextAnnotationLayout.hitTarget(at: CGPoint(x: 180, y: 237), in: rect), .move)
+        XCTAssertEqual(TextAnnotationLayout.hitTarget(at: CGPoint(x: 93, y: 216), in: rect), .resize(.left))
+        XCTAssertEqual(TextAnnotationLayout.hitTarget(at: CGPoint(x: 267, y: 216), in: rect), .resize(.right))
+        XCTAssertNil(TextAnnotationLayout.hitTarget(at: CGPoint(x: 180, y: 250), in: rect))
+    }
+
+    func testResizePreservesPointerGrabOffset() {
+        let rect = CGRect(x: 100, y: 200, width: 160, height: 32)
+        let target = TextAnnotationLayout.resizePoint(for: .right, in: rect,
+            from: CGPoint(x: 268, y: 216), to: CGPoint(x: 288, y: 216))
+        XCTAssertEqual(target.x, 280)
+        XCTAssertFalse(TextAnnotationLayout.hasDragged(from: .zero, to: CGPoint(x: 1, y: 1)))
+        XCTAssertTrue(TextAnnotationLayout.hasDragged(from: .zero, to: CGPoint(x: 3, y: 0)))
+    }
+
+    func testMultilineGrowthShiftsUpAtBottomInsteadOfClipping() {
+        let bounds = CGRect(x: 0, y: 0, width: 300, height: 200)
+        let rect = CGRect(x: 100, y: 10, width: 160, height: 32)
+        let grown = TextAnnotationLayout.fittingHeight(rect, height: 70, inside: bounds)
+        XCTAssertEqual(grown, CGRect(x: 100, y: 0, width: 160, height: 70))
+        XCTAssertTrue(bounds.contains(grown))
+    }
+
+    func testResizeInNarrowSelectionNeverOverflowsMinimumWidth() {
+        let bounds = CGRect(x: 0, y: 0, width: 30, height: 100)
+        let rect = CGRect(x: 0, y: 20, width: 30, height: 32)
+        for handle in TextAnnotationHandle.allCases {
+            let resized = TextAnnotationLayout.resize(rect, handle: handle, to: CGPoint(x: 90, y: 20),
+                                                     inside: bounds, minimumWidth: 48)
+            XCTAssertTrue(bounds.contains(resized))
+        }
+    }
+
     func testMapsRectangleFromOverlayPointsIntoCropPixels() {
         let subject = Annotation.rectangle(
             CGRect(x: 10, y: 20, width: 30, height: 40),
@@ -73,13 +117,13 @@ final class AnnotationTransformTests: XCTestCase {
         )
     }
 
-    func testTextBoxTopRightHandleChangesWidthFromTheRight() {
+    func testTextBoxRightHandleChangesWidthFromTheRight() {
         let original = CGRect(x: 30, y: 40, width: 120, height: 28)
 
         XCTAssertEqual(
             TextAnnotationLayout.resize(
                 original,
-                handle: .topRight,
+                handle: .right,
                 to: CGPoint(x: 210, y: 120),
                 inside: CGRect(x: 0, y: 0, width: 240, height: 180),
                 minimumWidth: 48
@@ -88,13 +132,13 @@ final class AnnotationTransformTests: XCTestCase {
         )
     }
 
-    func testTextBoxBottomLeftHandleClampsToMinimumWidthAndBounds() {
+    func testTextBoxLeftHandleClampsToMinimumWidthAndBounds() {
         let original = CGRect(x: 30, y: 40, width: 120, height: 28)
 
         XCTAssertEqual(
             TextAnnotationLayout.resize(
                 original,
-                handle: .bottomLeft,
+                handle: .left,
                 to: CGPoint(x: 140, y: 20),
                 inside: CGRect(x: 0, y: 0, width: 240, height: 180),
                 minimumWidth: 48
@@ -103,13 +147,13 @@ final class AnnotationTransformTests: XCTestCase {
         )
     }
 
-    func testTextBoxProvidesFourWechatStyleCornerHandles() {
+    func testTextBoxProvidesTwoSideHandlesForWidthAdjustment() {
         XCTAssertEqual(
             TextAnnotationHandle.allCases,
-            [.topLeft, .topRight, .bottomLeft, .bottomRight]
+            [.left, .right]
         )
-        XCTAssertEqual(TextAnnotationHandle.topLeft.horizontalEdge, .left)
-        XCTAssertEqual(TextAnnotationHandle.bottomRight.horizontalEdge, .right)
+        XCTAssertEqual(TextAnnotationHandle.left.horizontalEdge, .left)
+        XCTAssertEqual(TextAnnotationHandle.right.horizontalEdge, .right)
     }
 
     func testMovingTextBoxStaysInsideSelection() {
@@ -151,7 +195,7 @@ final class AnnotationTransformTests: XCTestCase {
                 minimumWidth: 48,
                 height: 30
             ),
-            CGRect(x: 40, y: 50, width: 160, height: 30)
+            CGRect(x: 40, y: 35, width: 160, height: 30)
         )
 
         XCTAssertEqual(

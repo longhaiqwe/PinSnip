@@ -23,16 +23,20 @@ final class ScreenScrollingCapture {
     private var captureTask: Task<Void, Never>?
     private var onProgress: ((Int, Int) -> Void)?
     private var onStopRequested: (() -> Void)?
+    private var onAlignmentLost: (() -> Void)?
+    private var onManualScrollingRequired: (() -> Void)?
     private var frameCount = 0
     private var scrollLocation = CGPoint.zero
-    private var scrollStep: Int32 = 0
+    private var scrollStep = 0
 
     func start(
         screen: NSScreen,
         selectionRect: CGRect,
         mode: ScrollingCaptureMode,
         onProgress: @escaping (Int, Int) -> Void,
-        onStopRequested: @escaping () -> Void
+        onStopRequested: @escaping () -> Void,
+        onAlignmentLost: @escaping () -> Void = {},
+        onManualScrollingRequired: @escaping () -> Void = {}
     ) async throws {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
@@ -79,11 +83,13 @@ final class ScreenScrollingCapture {
             x: globalSelection.midX,
             y: primaryScreenMaxY - globalSelection.midY
         )
-        scrollStep = Int32(max(80, min(1_200, selectionRect.height * 0.72)))
+        scrollStep = ScrollingCaptureScrollPlan.step(selectionHeight: selectionRect.height)
         self.filter = filter
         self.configuration = configuration
         self.onProgress = onProgress
         self.onStopRequested = onStopRequested
+        self.onAlignmentLost = onAlignmentLost
+        self.onManualScrollingRequired = onManualScrollingRequired
         let assembler = ScrollingCaptureAssembler(
             maximumPixelCount: Self.maximumPixelCount
         )
@@ -128,28 +134,61 @@ final class ScreenScrollingCapture {
 
     private func automaticCaptureLoop() async {
         try? await Task.sleep(for: .milliseconds(220))
-        var unchangedCount = 0
+        var progress = ScrollingCaptureAutomaticProgress()
+        var shouldScroll = true
         while !Task.isCancelled {
-            await postScroll()
+            let didScroll = shouldScroll
+            if didScroll { await postScroll(distance: scrollStep) }
             guard !Task.isCancelled else { return }
             try? await Task.sleep(for: .milliseconds(480))
             guard !Task.isCancelled else { return }
 
-            let result = await captureAndAppend(retryUnmatched: true)
+            var didRecover = false
+            var result = await captureAndAppend(retryUnmatched: true)
+            // Never keep scrolling past an unmatched frame. Back up in smaller steps
+            // to recover overlap with the last accepted frame before moving forward.
+            if didScroll, case .unmatched = result {
+                for _ in 0..<3 {
+                    guard !Task.isCancelled, scrollStep > 1 else { break }
+                    didRecover = true
+                    let correction = max(1, scrollStep / 2)
+                    scrollStep -= correction
+                    await postScroll(distance: -correction)
+                    try? await Task.sleep(for: .milliseconds(480))
+                    guard !Task.isCancelled else { return }
+                    result = await captureAndAppend(retryUnmatched: true)
+                    if case .unmatched = result { continue }
+                    break
+                }
+            }
+            if let result, progress.observe(
+                result,
+                isForwardAttempt: didScroll && !didRecover
+            ) {
+                onManualScrollingRequired?()
+                await manualCaptureLoop()
+                return
+            }
             switch result {
             case .appended:
-                unchangedCount = 0
-            case .unchanged:
-                unchangedCount += 1
-                if unchangedCount >= 2 {
-                    onStopRequested?()
-                    return
+                shouldScroll = true
+            case let .unchanged(totalPixelHeight):
+                if !didScroll || didRecover {
+                    // The user returned to the last accepted position; resume safely.
+                    shouldScroll = true
+                    onProgress?(frameCount, totalPixelHeight)
                 }
+
             case .reachedLimit:
                 onStopRequested?()
                 return
-            case .started, .unmatched, nil:
-                unchangedCount = 0
+            case .unmatched:
+                if didScroll { onAlignmentLost?() }
+                shouldScroll = false
+            case nil:
+                return
+            case .started:
+                break
             }
         }
     }
@@ -163,6 +202,8 @@ final class ScreenScrollingCapture {
                 onStopRequested?()
                 return
             }
+            if case .unmatched = result { onAlignmentLost?() }
+            if result == nil { return }
         }
     }
 
@@ -203,15 +244,14 @@ final class ScreenScrollingCapture {
         )
     }
 
-    private func postScroll() async {
-        let pulse = max(1, scrollStep / 3)
-        for _ in 0..<3 {
+    private func postScroll(distance: Int) async {
+        for pulse in ScrollingCaptureScrollPlan.pulses(distance: distance) {
             guard !Task.isCancelled,
                   let event = CGEvent(
                     scrollWheelEvent2Source: nil,
                     units: .pixel,
                     wheelCount: 1,
-                    wheel1: -pulse,
+                    wheel1: -Int32(pulse),
                     wheel2: 0,
                     wheel3: 0
                   )
@@ -229,6 +269,8 @@ final class ScreenScrollingCapture {
         assembler = nil
         onProgress = nil
         onStopRequested = nil
+        onAlignmentLost = nil
+        onManualScrollingRequired = nil
         frameCount = 0
         scrollLocation = .zero
         scrollStep = 0

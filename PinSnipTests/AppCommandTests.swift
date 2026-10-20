@@ -15,6 +15,7 @@ final class AppCommandTests: XCTestCase {
         router.perform(.checkForUpdates)
         router.perform(.toggleAutomaticUpdateChecks)
         router.perform(.toggleAutomaticUpdateDownloads)
+        router.perform(.toggleLaunchAtLogin)
 
         XCTAssertEqual(
             received,
@@ -27,6 +28,7 @@ final class AppCommandTests: XCTestCase {
                 .checkForUpdates,
                 .toggleAutomaticUpdateChecks,
                 .toggleAutomaticUpdateDownloads,
+                .toggleLaunchAtLogin,
             ]
         )
     }

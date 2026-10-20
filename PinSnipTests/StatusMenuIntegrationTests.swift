@@ -23,6 +23,16 @@ final class StatusMenuIntegrationTests: XCTestCase {
         XCTAssertTrue(controller.contains("window?.ignoresMouseEvents == true"))
     }
 
+    func testLaunchAtLoginMenuIntegration() throws {
+        let source = try source(at: "PinSnip/App/AppDelegate.swift")
+
+        XCTAssertTrue(source.contains("开机启动"))
+        XCTAssertTrue(source.contains("toggleLaunchAtLogin"))
+        XCTAssertTrue(source.contains("updateLaunchAtLoginMenuState()"))
+        XCTAssertTrue(source.contains("NSMenuDelegate"))
+        XCTAssertTrue(source.contains("func menuWillOpen(_ menu: NSMenu)"))
+    }
+
     private func source(at relativePath: String) throws -> String {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

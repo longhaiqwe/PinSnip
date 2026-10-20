@@ -29,7 +29,11 @@ public enum ShareCardRenderer {
         private let contentRect: CGRect
         private let cornerRadius: CGFloat
 
-        public init?(styleSource: CGImage, style: ShareStyle = .paperCut) {
+        public init?(
+            styleSource: CGImage,
+            style: ShareStyle = .paperCut,
+            borderSize: ShareBorderSize = .automatic
+        ) {
             self.style = style
             if style == .original {
                 self.background = nil
@@ -43,7 +47,8 @@ public enum ShareCardRenderer {
                 return
             }
 
-            let padding = ShareCardRenderer.canvasPadding(for: styleSource)
+            let padding = (style == .paperCut ? ShareBorderSize.automatic : borderSize)
+                .padding(width: styleSource.width, height: styleSource.height)
             let canvasWidth = styleSource.width + padding * 2
             let canvasHeight = styleSource.height + padding * 2
             guard let context = ShareCardRenderer.makeContext(
@@ -69,13 +74,17 @@ public enum ShareCardRenderer {
                     field: palette.field,
                     context: context
                 )
-            case .bordered:
-                ShareCardRenderer.drawBorderBackground(
-                    styleSource,
-                    in: canvas,
-                    padding: CGFloat(padding),
-                    context: context
-                )
+            case .bordered, .dusk:
+                if style == .dusk {
+                    ShareCardRenderer.drawDuskBackground(in: canvas, context: context)
+                } else {
+                    ShareCardRenderer.drawBorderBackground(
+                        styleSource,
+                        in: canvas,
+                        padding: CGFloat(padding),
+                        context: context
+                    )
+                }
                 ShareCardRenderer.drawBorderCardShadow(
                     in: contentRect,
                     cornerRadius: cornerRadius,
@@ -106,7 +115,7 @@ public enum ShareCardRenderer {
                     in: contentRect,
                     context: context
                 )
-            case .bordered:
+            case .bordered, .dusk:
                 ShareCardRenderer.drawBorderScreenshotContent(
                     baseImage,
                     in: contentRect,
@@ -122,9 +131,10 @@ public enum ShareCardRenderer {
 
     public static func render(
         baseImage: CGImage,
-        style: ShareStyle = .paperCut
+        style: ShareStyle = .paperCut,
+        borderSize: ShareBorderSize = .automatic
     ) -> CGImage? {
-        Template(styleSource: baseImage, style: style)?.render(baseImage: baseImage)
+        Template(styleSource: baseImage, style: style, borderSize: borderSize)?.render(baseImage: baseImage)
     }
 
     private static func makeContext(width: Int, height: Int) -> CGContext? {
@@ -137,11 +147,6 @@ public enum ShareCardRenderer {
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
         )
-    }
-
-    private static func canvasPadding(for image: CGImage) -> Int {
-        let proportional = Int((CGFloat(min(image.width, image.height)) * 0.1).rounded())
-        return min(120, max(24, proportional))
     }
 
     private static func drawPaperStack(
@@ -241,12 +246,12 @@ public enum ShareCardRenderer {
         padding: CGFloat,
         context: CGContext
     ) {
+        // Keep blur sampling at the canvas edges from leaving translucent pixels.
+        context.setFillColor(CGColor(red: 0.12, green: 0.15, blue: 0.28, alpha: 1))
+        context.fill(canvas)
         if let background = blurredAspectFill(image, canvasSize: canvas.size, padding: padding) {
             context.interpolationQuality = .high
             context.draw(background, in: canvas)
-        } else {
-            context.setFillColor(CGColor(red: 0.12, green: 0.15, blue: 0.28, alpha: 1))
-            context.fill(canvas)
         }
 
         let accent = ambientColor(from: dominantColor(in: image))
@@ -275,6 +280,32 @@ public enum ShareCardRenderer {
 
         context.setFillColor(CGColor(gray: 0, alpha: 0.06))
         context.fill(canvas)
+    }
+
+    /// Deep navy, burnt orange and burgundy, independent of screenshot content.
+    private static func drawDuskBackground(in canvas: CGRect, context: CGContext) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.scaleBy(x: canvas.width, y: canvas.height)
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        let base = CGGradient(colorsSpace: space, colors: [
+            CGColor(red: 0.035, green: 0.067, blue: 0.102, alpha: 1),
+            CGColor(red: 0.067, green: 0.082, blue: 0.114, alpha: 1),
+            CGColor(red: 0.27, green: 0.12, blue: 0.22, alpha: 1)
+        ] as CFArray, locations: [0, 0.4, 1])!
+        context.drawLinearGradient(base, start: CGPoint(x: 0, y: 0.5),
+                                   end: CGPoint(x: 1, y: 0.5), options: [])
+
+        // An elliptical warm glow across the upper right, fading into the navy base.
+        context.translateBy(x: 0.68, y: 0.96)
+        context.scaleBy(x: 0.57, y: 1.15)
+        let glow = CGGradient(colorsSpace: space, colors: [
+            CGColor(red: 0.65, green: 0.29, blue: 0.19, alpha: 0.94),
+            CGColor(red: 0.58, green: 0.25, blue: 0.20, alpha: 0.54),
+            CGColor(red: 0.40, green: 0.19, blue: 0.23, alpha: 0)
+        ] as CFArray, locations: [0, 0.43, 1])!
+        context.drawRadialGradient(glow, startCenter: .zero, startRadius: 0,
+                                   endCenter: .zero, endRadius: 1, options: [])
     }
 
     private static func blurredAspectFill(

@@ -1,9 +1,10 @@
+import AppKit
 import Carbon
 import Foundation
 import PinSnipCore
 
 @MainActor
-final class GlobalHotKeyCenter {
+final class GlobalHotKeyCenter: NSObject {
     enum Identifier: UInt32 {
         case capture = 1
         case recording = 2
@@ -17,10 +18,20 @@ final class GlobalHotKeyCenter {
     private var eventHandler: EventHandlerRef?
     private var activeSettings: HotKeySettings?
     private let signature: OSType = 0x504E5350
+    private(set) var trackingMenus: [NSMenu] = []
+    private var menuKeyMonitor: Any?
+    private var menuKeyTimer: Timer?
+    private var isReceivingMenuKey = false
 
     init(handler: @escaping (Identifier) -> Void) {
         self.handler = handler
+        super.init()
         installEventHandler()
+        NotificationCenter.default.addObserver(self, selector: #selector(menuBegan(_:)),
+            name: NSMenu.didBeginTrackingNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(menuEnded(_:)),
+            name: NSMenu.didEndTrackingNotification, object: nil)
+        installMenuKeyTimer()
     }
 
     @discardableResult
@@ -31,6 +42,7 @@ final class GlobalHotKeyCenter {
         unregisterHotKeys()
         if registerAll(settings) {
             activeSettings = settings
+            if !trackingMenus.isEmpty { unregisterHotKeys() }
             return true
         }
 
@@ -47,6 +59,11 @@ final class GlobalHotKeyCenter {
     }
 
     func shutdown() {
+        NotificationCenter.default.removeObserver(self)
+        stopMenuMonitoring()
+        menuKeyTimer?.invalidate()
+        menuKeyTimer = nil
+        trackingMenus.removeAll()
         setCaptureCancellationEnabled(false)
         unregisterHotKeys()
         activeSettings = nil
@@ -54,6 +71,75 @@ final class GlobalHotKeyCenter {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
         }
+    }
+
+    @objc private func menuBegan(_ notification: Notification) {
+        guard let menu = notification.object as? NSMenu,
+              !trackingMenus.contains(where: { $0 === menu }) else { return }
+        trackingMenus.append(menu)
+        guard trackingMenus.count == 1 else { return }
+        // AppKit's menu loop consumes keyboard events before Carbon hotkeys.
+        // Temporarily receive raw local keys instead; no accessibility permission is needed.
+        unregisterHotKeys()
+        menuKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let consumed = MainActor.assumeIsolated { self?.handleMenuKey(event) == true }
+            return consumed ? nil : event
+        }
+    }
+
+    private func installMenuKeyTimer() {
+        // NSMenu can consume keys without NSApplication.sendEvent. Poll only in
+        // its tracking mode, at a bounded rate so mouse movement stays responsive.
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.receiveMenuKeyFromQueue() }
+        }
+        menuKeyTimer = timer
+        RunLoop.main.add(timer, forMode: .eventTracking)
+    }
+
+    @objc private func menuEnded(_ notification: Notification) {
+        guard let menu = notification.object as? NSMenu,
+              trackingMenus.contains(where: { $0 === menu }) else { return }
+        trackingMenus.removeAll { $0 === menu }
+        guard trackingMenus.isEmpty else { return }
+        stopMenuMonitoring()
+        if let activeSettings, !registerAll(activeSettings) {
+            NSLog("PinSnip: could not restore global shortcuts after menu tracking")
+        }
+    }
+
+    private func stopMenuMonitoring() {
+        if let menuKeyMonitor { NSEvent.removeMonitor(menuKeyMonitor) }
+        menuKeyMonitor = nil
+    }
+
+    private func menuIdentifier(for event: NSEvent) -> Identifier? {
+        guard !trackingMenus.isEmpty, event.type == .keyDown, let activeSettings else { return nil }
+        // Only command/option/control/shift count; F-keys carry a synthesized Fn flag.
+        let shortcut = HotKeyShortcut(event: event)
+        if shortcut == activeSettings.capture { return .capture }
+        if shortcut == activeSettings.recording { return .recording }
+        if shortcut == activeSettings.paste { return .paste }
+        return nil
+    }
+
+    private func handleMenuKey(_ event: NSEvent) -> Bool {
+        guard let identifier = menuIdentifier(for: event) else { return false }
+        if !event.isARepeat { handler(identifier) }
+        return true
+    }
+
+    private func receiveMenuKeyFromQueue() {
+        guard !trackingMenus.isEmpty, !isReceivingMenuKey else { return }
+        isReceivingMenuKey = true
+        defer { isReceivingMenuKey = false }
+        // Look for a key without removing unrelated events. Context-menu loops
+        // can leave app-defined/key-up events queued ahead of the shortcut.
+        guard let key = NSApp.nextEvent(matching: .keyDown, until: .distantPast,
+            inMode: .eventTracking, dequeue: false), menuIdentifier(for: key) != nil else { return }
+        guard let event = NSApp.nextEvent(matching: .keyDown, until: .distantPast,
+            inMode: .eventTracking, dequeue: true) else { return }
+        _ = handleMenuKey(event)
     }
 
     @discardableResult
