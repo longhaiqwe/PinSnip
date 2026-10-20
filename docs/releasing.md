@@ -24,6 +24,21 @@ PinSnip 使用 Sparkle 2 获取、验证并安装更新。更新清单托管在�
 7. 最后提交并推送 `appcast.xml`。不要在安装包可下载前发布清单，避免客户端
    读到暂时不可用的更新。
 
+## Apple 公证配置
+
+当前发布 Mac 已保存的 `notarytool` 钥匙串配置名是 `shiyinfm-notary`，
+由同一开发者团队共用，也用于 PinSnip；不要仅按应用名称猜测配置名。
+
+```bash
+xcrun notarytool history --keychain-profile shiyinfm-notary
+xcrun notarytool submit build/Release/PinSnip-v<版本>-notarization.zip \
+  --keychain-profile shiyinfm-notary --wait
+```
+
+如果 Apple 返回 HTTP 403，并提示必需协议缺失或过期，说明公证被开发者账号的
+协议状态阻止；这不同于本机没有凭据。需要账号持有人在 Apple Developer 账户
+查看并处理待签署协议，再重新提交。此时保留发布草稿，不发布未经公证的安装包或更新清单。
+
 ## 本机替换：保持原有权限对应的签名身份
 
 用户要求：以后替换已安装版本，必须沿用原来的正式签名，避免因更换签名身份而重新授权。
