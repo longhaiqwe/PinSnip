@@ -68,17 +68,19 @@ final class ClipboardReaderTests: XCTestCase {
         XCTAssertEqual(ClipboardReader.read(from: pasteboard), .file(url))
     }
 
-    func testClassifiesTextAndColor() throws {
+    func testIgnoresTextWithoutChangingTheClipboard() {
         let textPasteboard = makePasteboard()
         textPasteboard.setString("hello", forType: .string)
-        XCTAssertEqual(ClipboardReader.read(from: textPasteboard), .text("hello"))
+        let changeCount = textPasteboard.changeCount
+        XCTAssertNil(ClipboardReader.read(from: textPasteboard))
+        XCTAssertEqual(textPasteboard.string(forType: .string), "hello")
+        XCTAssertEqual(textPasteboard.changeCount, changeCount)
+    }
 
+    func testIgnoresColorTextInsteadOfCreatingACard() {
         let colorPasteboard = makePasteboard()
         colorPasteboard.setString("#22C55E", forType: .string)
-        XCTAssertEqual(
-            ClipboardReader.read(from: colorPasteboard),
-            .color(RGBAColor(red: 34.0 / 255, green: 197.0 / 255, blue: 94.0 / 255))
-        )
+        XCTAssertNil(ClipboardReader.read(from: colorPasteboard))
     }
 
     func testEmptyPasteboardReturnsNil() {

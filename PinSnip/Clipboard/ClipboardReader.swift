@@ -18,9 +18,6 @@ public enum ClipboardReader {
            let url = URL(string: value) {
             return .file(url)
         }
-        if let text = pasteboard.string(forType: .string) {
-            return .classify(text: text)
-        }
         return nil
     }
 }

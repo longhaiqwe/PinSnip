@@ -533,7 +533,10 @@ final class CaptureCoordinator {
 
         if historyPasteboardChangeCount != pasteboard.changeCount {
             historyPasteboardChangeCount = pasteboard.changeCount
-            return .useClipboard
+            // Text must not consume a press before the next captured screenshot.
+            if ClipboardReader.read(from: pasteboard) != nil {
+                return .useClipboard
+            }
         }
 
         while let data = captureHistory.nextForPasting() {
