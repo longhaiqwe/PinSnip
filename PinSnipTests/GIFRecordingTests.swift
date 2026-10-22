@@ -41,6 +41,22 @@ final class GIFRecordingTests: XCTestCase {
         XCTAssertEqual(decoded.loopCount, 0)
     }
 
+    func testGIFTimingDoesNotAccumulateRoundingErrorAcrossFrames() throws {
+        let image = try solidImage(red: 1, blue: 0)
+        let frames = (0..<100).map { _ in AnimatedImage.Frame(image: image, duration: 0.041) }
+        let data = try XCTUnwrap(AnimatedGIFEncoder.encode(frames: frames))
+        let decoded = try XCTUnwrap(AnimatedImage(data: data))
+        XCTAssertEqual(decoded.frames.reduce(0) { $0 + $1.duration }, 4.1, accuracy: 0.011)
+    }
+
+    func testTimelineKeepsTheFinalStaticFrameUntilStop() {
+        let durations = GIFFrameTimeline.durations(
+            for: [10, 10.04, 10.08], fallbackDuration: 0.04, endTimestamp: 12
+        )
+        XCTAssertEqual(durations[2], 1.92, accuracy: 0.0001)
+        XCTAssertEqual(durations.reduce(0, +), 2, accuracy: 0.0001)
+    }
+
     func testRecordingEncodingUsesSocialShareDecoration() throws {
         let frames = [
             AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),

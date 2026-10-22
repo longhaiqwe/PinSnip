@@ -36,13 +36,15 @@ public struct ScreenRecordingGeometry: Equatable, Sendable {
 public enum GIFFrameTimeline {
     public static func durations(
         for timestamps: [TimeInterval],
-        fallbackDuration: TimeInterval
+        fallbackDuration: TimeInterval,
+        endTimestamp: TimeInterval? = nil
     ) -> [TimeInterval] {
         guard !timestamps.isEmpty else { return [] }
         let fallback = max(0.02, fallbackDuration)
         return timestamps.indices.map { index in
-            guard index + 1 < timestamps.count else { return fallback }
-            let interval = timestamps[index + 1] - timestamps[index]
+            let next = index + 1 < timestamps.count ? timestamps[index + 1] : endTimestamp
+            guard let next else { return fallback }
+            let interval = next - timestamps[index]
             return interval.isFinite && interval > 0 ? max(0.02, interval) : fallback
         }
     }
@@ -171,16 +173,27 @@ public enum AnimatedGIFEncoder {
             destination,
             [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFLoopCount: max(0, loopCount)]] as CFDictionary
         )
+        var elapsed: TimeInterval = 0
+        var encodedCentiseconds = 0
         for index in 0..<frameCount {
-            guard let frame = frameProvider(index) else { return nil }
-            let duration = max(0.02, frame.duration)
-            let properties = [
-                kCGImagePropertyGIFDictionary: [
-                    kCGImagePropertyGIFDelayTime: duration,
-                    kCGImagePropertyGIFUnclampedDelayTime: duration
-                ]
-            ] as CFDictionary
-            CGImageDestinationAddImage(destination, frame.image, properties)
+            let added = autoreleasepool { () -> Bool in
+                guard let frame = frameProvider(index) else { return false }
+                // GIF stores hundredths of a second. Round the cumulative timeline
+                // so fractional capture intervals do not speed up a long recording.
+                elapsed += frame.duration.isFinite ? max(0.02, frame.duration) : 0.1
+                let nextCentiseconds = max(encodedCentiseconds + 2, Int((elapsed * 100).rounded()))
+                let duration = Double(nextCentiseconds - encodedCentiseconds) / 100
+                encodedCentiseconds = nextCentiseconds
+                let properties = [
+                    kCGImagePropertyGIFDictionary: [
+                        kCGImagePropertyGIFDelayTime: duration,
+                        kCGImagePropertyGIFUnclampedDelayTime: duration
+                    ]
+                ] as CFDictionary
+                CGImageDestinationAddImage(destination, frame.image, properties)
+                return true
+            }
+            guard added else { return nil }
         }
         guard CGImageDestinationFinalize(destination) else { return nil }
         return data as Data
