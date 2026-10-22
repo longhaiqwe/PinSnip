@@ -60,15 +60,15 @@ final class UpdateConfigurationTests: XCTestCase {
                 .components(separatedBy: "</item>").first
         )
 
-        XCTAssertTrue(currentItem.contains("<sparkle:version>14</sparkle:version>"))
+        XCTAssertTrue(currentItem.contains("<sparkle:version>15</sparkle:version>"))
         XCTAssertTrue(
             currentItem.contains(
-                "<sparkle:shortVersionString>0.9.0</sparkle:shortVersionString>"
+                "<sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
             currentItem.contains(
-                "releases/download/v0.9.0/PinSnip-v0.9.0-macOS-universal.zip"
+                "releases/download/v0.9.1/PinSnip-v0.9.1-macOS-universal.zip"
             )
         )
         XCTAssertTrue(currentItem.contains("sparkle:edSignature="))
