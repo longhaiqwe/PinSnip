@@ -4,6 +4,62 @@ import XCTest
 import PinSnipCore
 
 final class GIFWindowCaptureTests: XCTestCase {
+    func testCacheStoresIncompressiblePixelsAsAnOwnedLosslessCopy() throws {
+        let source = try XCTUnwrap(NSMutableData(length: 1_048_576))
+        let words = source.mutableBytes.assumingMemoryBound(to: UInt32.self)
+        var seed: UInt32 = 42
+        for index in 0..<(source.length / 4) {
+            seed = seed &* 1_664_525 &+ 1_013_904_223
+            words[index] = seed | 0xff00_0000
+        }
+        let original = Data(bytes: source.bytes, count: source.length)
+        let stored = try GIFFrameCacheData(copying: source.bytes, count: source.length)
+        XCTAssertFalse(stored.isCompressed)
+        XCTAssertEqual(stored.data.length, source.length)
+        memset(source.mutableBytes, 0, source.length)
+        XCTAssertEqual(try GIFFrameCacheData.decode(stored.data, isCompressed: stored.isCompressed) as Data, original)
+    }
+
+    func testCacheStillCompressesRepetitivePixelsLosslessly() throws {
+        let source = Data(repeating: 0x7f, count: 1_048_576)
+        let stored = try source.withUnsafeBytes {
+            try GIFFrameCacheData(copying: $0.baseAddress!, count: $0.count)
+        }
+        XCTAssertTrue(stored.isCompressed)
+        XCTAssertLessThan(stored.data.length, source.count / 10)
+        XCTAssertEqual(try GIFFrameCacheData.decode(stored.data, isCompressed: stored.isCompressed) as Data, source)
+    }
+
+    func testRecordingReadsMixedCacheEncodingsAtTheirOwnOffsets() async throws {
+        let output = try GIFRecordingStreamOutput(onStopRequested: {})
+        try output.queue.sync {
+            var buffer: CVPixelBuffer?
+            XCTAssertEqual(CVPixelBufferCreate(nil, 512, 512, kCVPixelFormatType_32BGRA, nil, &buffer), kCVReturnSuccess)
+            let pixels = try XCTUnwrap(buffer)
+            for frame in 0..<3 {
+                CVPixelBufferLockBaseAddress(pixels, [])
+                let base = try XCTUnwrap(CVPixelBufferGetBaseAddress(pixels)).assumingMemoryBound(to: UInt32.self)
+                var seed: UInt32 = 42
+                for index in 0..<(CVPixelBufferGetBytesPerRow(pixels) * 512 / 4) {
+                    seed = seed &* 1_664_525 &+ 1_013_904_223
+                    base[index] = frame == 1 ? seed | 0xff00_0000 : (frame == 0 ? 0xffff_0000 : 0xff00_00ff)
+                }
+                CVPixelBufferUnlockBaseAddress(pixels, [])
+                output.append(pixels, timestamp: 10 + Double(frame) * 0.04)
+            }
+        }
+        let data = await output.encode(endTimestamp: 10.12, fallbackDuration: 0.04, style: .original, borderSize: .automatic)
+        let animation = try XCTUnwrap(AnimatedImage(data: XCTUnwrap(data)))
+        XCTAssertEqual(animation.frames.count, 3)
+        for frame in animation.frames { XCTAssertEqual(frame.duration, 0.04, accuracy: 0.001) }
+        for index in [0, 2] {
+            let bitmap = NSBitmapImageRep(cgImage: animation.frames[index].image)
+            let color = try XCTUnwrap(bitmap.colorAt(x: 0, y: 0)?.usingColorSpace(.deviceRGB))
+            XCTAssertEqual(color.redComponent, index == 0 ? 1 : 0, accuracy: 0.02)
+            XCTAssertEqual(color.blueComponent, index == 2 ? 1 : 0, accuracy: 0.02)
+        }
+    }
+
     @MainActor
     func testRecordingPreservesRetinaPixelsForTypicalSelection() {
         let geometry = ScreenRecordingGeometry(

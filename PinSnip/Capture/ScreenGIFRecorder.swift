@@ -135,13 +135,53 @@ final class ScreenGIFRecorder {
     }
 }
 
+/// Avoid spending the capture budget compressing noise that will not shrink.
+/// Both paths own their bytes before the capture surface is unlocked/reused.
+struct GIFFrameCacheData {
+    let data: NSData
+    let isCompressed: Bool
+
+    init(copying bytes: UnsafeRawPointer, count: Int) throws {
+        let borrowed = NSData(bytesNoCopy: UnsafeMutableRawPointer(mutating: bytes), length: count, freeWhenDone: false)
+        let sample: NSData
+        if count <= 32_768 {
+            sample = borrowed
+        } else {
+            let chunks = NSMutableData(capacity: 32_768)!
+            for index in 0..<8 {
+                let offset = (count - 4_096) * index / 7
+                chunks.append(bytes.advanced(by: offset), length: 4_096)
+            }
+            sample = chunks
+        }
+        let compressedSample = try sample.compressed(using: .lz4)
+        if compressedSample.length < sample.length * 9 / 10 {
+            let compressed = count <= 32_768 ? compressedSample : try borrowed.compressed(using: .lz4)
+            if compressed.length < count {
+                data = compressed
+                isCompressed = true
+                return
+            }
+        }
+        data = NSData(bytes: bytes, length: count)
+        isCompressed = false
+    }
+
+    static func decode(_ data: NSData, isCompressed: Bool) throws -> NSData {
+        isCompressed ? try data.decompressed(using: .lz4) : data
+    }
+}
+
 /// All mutable state and disk work are confined to `queue`. Capture surfaces are
 /// released after a fast lossless copy; no frame or export work runs on MainActor.
 final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate, @unchecked Sendable {
-    enum RecordingError: Error { case noFrames, invalidPixelBuffer }
+    enum RecordingError: Error { case noFrames, invalidPixelBuffer, cannotCreateCacheFile }
 
     let queue = DispatchQueue(label: "com.longhai.pinsnip.gif-recording", qos: .userInitiated)
     private let directory: URL
+    private let cacheURL: URL
+    private let cacheHandle: FileHandle
+    private var cacheOffset: UInt64 = 0
     private let onStopRequested: @Sendable () -> Void
     private var frames: [Frame] = []
     private var closed = false
@@ -153,10 +193,17 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
         let width: Int
         let height: Int
         let bytesPerRow: Int
+        let isCompressed: Bool
+        let offset: UInt64
+        let byteCount: Int
 
         func image() -> CGImage? {
-            guard let data = try? Data(contentsOf: url),
-                  let pixels = try? (data as NSData).decompressed(using: .lz4),
+            guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+            defer { try? handle.close() }
+            guard (try? handle.seek(toOffset: offset)) != nil,
+                  let data = try? handle.read(upToCount: byteCount),
+                  data.count == byteCount,
+                  let pixels = try? GIFFrameCacheData.decode(data as NSData, isCompressed: isCompressed),
                   let provider = CGDataProvider(data: pixels as CFData)
             else { return nil }
             return CGImage(
@@ -172,10 +219,23 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
         self.onStopRequested = onStopRequested
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("PinSnip-GIF-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        cacheURL = directory.appendingPathComponent("frames.pixels")
+        do {
+            guard FileManager.default.createFile(atPath: cacheURL.path, contents: nil) else {
+                throw RecordingError.cannotCreateCacheFile
+            }
+            cacheHandle = try FileHandle(forWritingTo: cacheURL)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
         super.init()
     }
 
-    deinit { try? FileManager.default.removeItem(at: directory) }
+    deinit {
+        try? cacheHandle.close()
+        try? FileManager.default.removeItem(at: directory)
+    }
 
     func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, sampleBuffer.isValid,
@@ -202,24 +262,24 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
                 guard CVPixelBufferGetPixelFormatType(buffer) == kCVPixelFormatType_32BGRA,
                       CVPixelBufferLockBaseAddress(buffer, .readOnly) == kCVReturnSuccess
                 else { throw RecordingError.invalidPixelBuffer }
-                let compressed: NSData
+                let stored: GIFFrameCacheData
                 do {
                     defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
                     guard let base = CVPixelBufferGetBaseAddress(buffer) else { throw RecordingError.invalidPixelBuffer }
                     let count = CVPixelBufferGetBytesPerRow(buffer) * CVPixelBufferGetHeight(buffer)
-                    // Compression is synchronous while the surface is locked.
-                    // Borrow its bytes instead of copying up to 23 MB per frame;
-                    // only the compressed, independently owned data escapes.
-                    compressed = try NSData(bytesNoCopy: base, length: count, freeWhenDone: false)
-                        .compressed(using: .lz4)
+                    stored = try GIFFrameCacheData(copying: base, count: count)
                 }
-                let url = directory.appendingPathComponent("\(frames.count).lz4")
-                try compressed.write(to: url)
+                // Append to one disposable cache file. Repeated file creation
+                // and close operations can stall capture past its 40 ms budget.
+                try cacheHandle.write(contentsOf: stored.data as Data)
                 frames.append(Frame(
-                    url: url, timestamp: timestamp,
+                    url: cacheURL, timestamp: timestamp,
                     width: CVPixelBufferGetWidth(buffer), height: CVPixelBufferGetHeight(buffer),
-                    bytesPerRow: CVPixelBufferGetBytesPerRow(buffer)
+                    bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
+                    isCompressed: stored.isCompressed,
+                    offset: cacheOffset, byteCount: stored.data.length
                 ))
+                cacheOffset += UInt64(stored.data.length)
             } catch {
                 failed = true
                 onStopRequested()
@@ -246,6 +306,11 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
                     return
                 }
                 self.closed = true
+                do { try self.cacheHandle.close() }
+                catch {
+                    continuation.resume(returning: nil)
+                    return
+                }
                 // A callback already in flight when Stop was pressed may carry a
                 // later PTS. Keep only frames within the requested recording.
                 let frames = self.frames.filter { $0.timestamp <= endTimestamp }
@@ -278,6 +343,7 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
     private func cleanup() {
         closed = true
         frames.removeAll()
+        try? cacheHandle.close()
         try? FileManager.default.removeItem(at: directory)
     }
 }
