@@ -42,7 +42,15 @@ final class MenuHotKeyTests: XCTestCase {
             XCTAssertTrue(center.trackingMenus.contains { $0 === menu })
             let capture = MenuCaptureSession(menus: center.trackingMenus)
             session = capture
-            capture.start(capture: { image }) { _ in delivered = true }
+            capture.start(capture: { image }) { result in
+                switch result {
+                case .success(let captured):
+                    XCTAssertEqual(captured.width, image.width)
+                case .failure(let error):
+                    XCTFail("Menu capture failed: \(error)")
+                }
+                delivered = true
+            }
         }
         defer {
             center.shutdown(); center = nil; session?.cancel()
@@ -56,7 +64,10 @@ final class MenuHotKeyTests: XCTestCase {
                             selector: #selector(TimerAction.fire), userInfo: nil, repeats: false)
         var timedOut = false
         let watchdogAction = TimerAction { timedOut = true; menu.cancelTrackingWithoutAnimation() }
-        let watchdog = Timer(timeInterval: 1, target: watchdogAction,
+        // This is a hang guard, not a performance assertion. Allow the real
+        // capture session's 5-second timeout to report its own result first;
+        // AppKit menu initialization can exceed one second under test load.
+        let watchdog = Timer(timeInterval: 10, target: watchdogAction,
                              selector: #selector(TimerAction.fire), userInfo: nil, repeats: false)
         RunLoop.main.add(trigger, forMode: .common)
         RunLoop.main.add(watchdog, forMode: .common)
