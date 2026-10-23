@@ -12,7 +12,7 @@ final class ClipboardReaderTests: XCTestCase {
             withIntermediateDirectories: true
         )
         defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
-        let gif = Data([0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+        let gif = try makeGIF(width: 4, height: 3)
 
         let url = try XCTUnwrap(
             ClipboardWriter.writeGIF(
@@ -27,6 +27,42 @@ final class ClipboardReaderTests: XCTestCase {
         XCTAssertEqual(item.string(forType: .fileURL), url.absoluteString)
         XCTAssertNil(pasteboard.data(forType: .tiff))
         XCTAssertEqual(try Data(contentsOf: url), gif)
+    }
+
+    func testCopiedGIFAutomaticallyFitsLandscapeAndPortraitLimits() throws {
+        for (width, height, expectedWidth, expectedHeight) in [(2496, 443, 1280, 227), (600, 2400, 270, 1080)] {
+            let original = try makeGIF(width: width, height: height)
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let url = try XCTUnwrap(ClipboardWriter.writeGIF(original, to: makePasteboard(), temporaryDirectory: folder))
+            let animation = try XCTUnwrap(AnimatedImage(data: Data(contentsOf: url)))
+            XCTAssertEqual(animation.pixelWidth, expectedWidth)
+            XCTAssertEqual(animation.pixelHeight, expectedHeight)
+            XCTAssertEqual(animation.frames.count, 2)
+            XCTAssertEqual(animation.frames[0].duration, 0.1, accuracy: 0.001)
+            XCTAssertEqual(animation.frames[1].duration, 0.2, accuracy: 0.001)
+            XCTAssertEqual(animation.loopCount, 3)
+        }
+    }
+
+    func testInvalidGIFDoesNotReplaceClipboard() {
+        let pasteboard = makePasteboard()
+        pasteboard.setString("keep", forType: .string)
+        XCTAssertNil(ClipboardWriter.writeGIF(Data("invalid".utf8), to: pasteboard))
+        XCTAssertEqual(pasteboard.string(forType: .string), "keep")
+    }
+
+    private func makeGIF(width: Int, height: Int) throws -> Data {
+        let context = try XCTUnwrap(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ))
+        let frames = try [CGFloat(0), CGFloat(1)].map { red in
+            context.setFillColor(red: red, green: 0, blue: 1 - red, alpha: 1)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            return AnimatedImage.Frame(image: try XCTUnwrap(context.makeImage()), duration: red == 0 ? 0.1 : 0.2)
+        }
+        return try XCTUnwrap(AnimatedGIFEncoder.encode(frames: frames, loopCount: 3))
     }
 
     func testReadsGIFDataBeforeStaticImageFallback() throws {

@@ -53,9 +53,7 @@ final class ShelfItem: Identifiable, ObservableObject {
     func copy(to pasteboard: NSPasteboard) -> Bool {
         if isAnimated {
             guard let data = try? Data(contentsOf: url) else { return false }
-            pasteboard.clearContents()
-            guard pasteboard.writeObjects([url as NSURL]) else { return false }
-            return pasteboard.setData(data, forType: NSPasteboard.PasteboardType(UTType.gif.identifier))
+            return ClipboardWriter.writeGIF(data, to: pasteboard, includesGIFData: true) != nil
         }
         guard let image = NSImage(contentsOf: url) else { return false }
         pasteboard.clearContents()

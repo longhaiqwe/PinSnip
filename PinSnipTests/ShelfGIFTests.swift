@@ -116,7 +116,29 @@ final class ShelfGIFTests: XCTestCase {
         }
         XCTAssertEqual(copied, data)
         XCTAssertEqual(try XCTUnwrap(AnimatedImage(data: copied)).frames.count, 2)
-        XCTAssertEqual(pasteboard.string(forType: .fileURL), url.absoluteString)
+        let copiedURL = try XCTUnwrap(URL(string: XCTUnwrap(pasteboard.string(forType: .fileURL))))
+        XCTAssertEqual(try Data(contentsOf: copiedURL), data)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+    }
+
+    @MainActor
+    func testCopyingWideShelfGIFResizesBothRepresentationsAndKeepsOriginal() throws {
+        let data = try makeGIF(width: 2496, height: 443)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let item = try ShelfItem.storeGIF(data, in: folder)
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(item.copy(to: pasteboard))
+        let copied = try XCTUnwrap(pasteboard.data(forType: NSPasteboard.PasteboardType("com.compuserve.gif")))
+        let animation = try XCTUnwrap(AnimatedImage(data: copied))
+        XCTAssertEqual(animation.pixelWidth, 1280)
+        XCTAssertEqual(animation.pixelHeight, 227)
+        XCTAssertEqual(animation.frames.count, 2)
+        let fileURL = try XCTUnwrap(URL(string: XCTUnwrap(pasteboard.string(forType: .fileURL))))
+        XCTAssertEqual(try Data(contentsOf: fileURL), copied)
+        XCTAssertEqual(try Data(contentsOf: item.url), data)
     }
 
     private func makeGIF(width: Int = 4, height: Int = 3) throws -> Data {
