@@ -72,6 +72,61 @@ final class TextAnnotationInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testPencilPaletteColorsSurviveToolSwitchingAndUndoRedo() throws {
+        let (window, unusedEditor, _) = makeEditor()
+        unusedEditor.removeFromSuperview()
+        defer { window.close() }
+        let context = try XCTUnwrap(CGContext(data: nil, width: 600, height: 400, bitsPerComponent: 8,
+            bytesPerRow: 2400, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        var result: CaptureResult?
+        let overlay = SelectionOverlayView(frame: CGRect(x: 0, y: 0, width: 600, height: 400),
+            screenshot: try XCTUnwrap(context.makeImage()), windowCandidates: [], initialPointer: .zero,
+            initialSelectionRect: CGRect(x: 40, y: 90, width: 520, height: 260), purpose: .stillImage,
+            onResult: { result = $0 }, onCancel: {})
+        window.contentView = overlay
+        let buttons = descendants(of: overlay).compactMap { $0 as? NSButton }
+        let pencil = try XCTUnwrap(buttons.first { $0.toolTip == "画笔" })
+        let text = try XCTUnwrap(buttons.first { $0.toolTip == "文字" })
+        let swatches = buttons.filter { $0.toolTip?.hasPrefix("画笔颜色：") == true }.sorted { $0.tag < $1.tag }
+        XCTAssertEqual(swatches.count, TextAnnotationPalette.colors.count)
+        XCTAssertTrue(swatches.allSatisfy(\.isHiddenOrHasHiddenAncestor))
+        pencil.performClick(nil)
+        overlay.layoutSubtreeIfNeeded()
+        for (index, swatch) in swatches.enumerated() {
+            XCTAssertFalse(swatch.isHiddenOrHasHiddenAncestor)
+            let swatchRect = overlay.convert(swatch.bounds, from: swatch)
+            XCTAssertTrue(overlay.bounds.contains(swatchRect))
+            XCTAssertTrue(overlay.hitTest(CGPoint(x: swatchRect.midX, y: swatchRect.midY)) === swatch)
+            swatch.performClick(nil)
+            XCTAssertEqual(swatches.filter { $0.state == .on }.count, 1)
+            XCTAssertEqual(swatch.state, .on)
+            let y = CGFloat(140 + index * 25)
+            overlay.mouseDown(with: event(.leftMouseDown, at: CGPoint(x: 150, y: y), in: window))
+            overlay.mouseDragged(with: event(.leftMouseDragged, at: CGPoint(x: 330, y: y), in: window))
+            overlay.mouseUp(with: event(.leftMouseUp, at: CGPoint(x: 330, y: y), in: window))
+        }
+        text.performClick(nil)
+        XCTAssertTrue(swatches.allSatisfy(\.isHiddenOrHasHiddenAncestor))
+        let textBlue = try XCTUnwrap(buttons.first { $0.toolTip == "文字颜色：蓝色" })
+        textBlue.performClick(nil)
+        pencil.performClick(nil)
+        XCTAssertEqual(swatches.first?.state, .on)
+        try XCTUnwrap(buttons.first { $0.toolTip == "画笔马赛克" }).performClick(nil)
+        XCTAssertTrue(swatches.allSatisfy(\.isHiddenOrHasHiddenAncestor))
+        try XCTUnwrap(buttons.first { $0.tag == 10 }).performClick(nil)
+        try XCTUnwrap(buttons.first { $0.tag == 11 }).performClick(nil)
+        try XCTUnwrap(buttons.first { $0.toolTip == "完成并复制分享图" }).performClick(nil)
+        let annotations = try XCTUnwrap(result?.annotations)
+        XCTAssertEqual(annotations.count, TextAnnotationPalette.colors.count)
+        for (index, annotation) in annotations.enumerated() {
+            guard case let .pencil(points, color, _) = annotation else { return XCTFail("Expected pencil") }
+            XCTAssertGreaterThan(points.count, 1)
+            XCTAssertEqual(color, TextAnnotationPalette.colors[index])
+        }
+    }
+
+    @MainActor
     func testArrowStylePickerAppearsOnlyForArrowTool() throws {
         let (window, unusedEditor, _) = makeEditor()
         unusedEditor.removeFromSuperview()

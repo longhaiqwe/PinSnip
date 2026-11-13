@@ -130,6 +130,9 @@ final class SelectionOverlayView: NSView {
     private lazy var numberOptionsStack = NSStackView()
     private lazy var numberSizePopUp = NSPopUpButton()
     private var annotationNumberSize = NumberAnnotationSizePreset.medium
+    private lazy var pencilOptionsBar = NSView()
+    private lazy var pencilOptionsStack = NSStackView()
+    private var pencilColorSwatches: [NSButton] = []
     private lazy var textOptionsBar = NSView()
     private lazy var textOptionsStack = NSStackView()
     private lazy var textSizePopUp = NSPopUpButton()
@@ -193,10 +196,12 @@ final class SelectionOverlayView: NSView {
         guard !editingControlsPrepared else { return }
         editingControlsPrepared = true
         configureTextOptionsBar()
+        configurePencilOptionsBar()
         configureNumberOptionsBar()
         configureArrowOptionsBar()
         toolbar.isHidden = phase == .selecting
         textOptionsBar.isHidden = phase == .selecting || tool != .text
+        pencilOptionsBar.isHidden = phase == .selecting || tool != .pencil
         numberOptionsBar.isHidden = phase == .selecting || tool != .number
         arrowOptionsBar.isHidden = phase == .selecting || tool != .arrow
         if phase == .editing { updateToolButtons() }
@@ -367,6 +372,7 @@ final class SelectionOverlayView: NSView {
         guard editingControlsPrepared else { return }
         layoutToolbar()
         layoutTextOptionsBar()
+        layoutPencilOptionsBar()
         layoutNumberOptionsBar()
         layoutArrowOptionsBar()
     }
@@ -627,6 +633,7 @@ final class SelectionOverlayView: NSView {
             editingSelectionRect = selectionState.rect
             toolbar.isHidden = false
             textOptionsBar.isHidden = tool != .text
+            pencilOptionsBar.isHidden = tool != .pencil
             numberOptionsBar.isHidden = tool != .number
             arrowOptionsBar.isHidden = tool != .arrow
             selectionOptionsBar.isHidden = true
@@ -1043,6 +1050,44 @@ final class SelectionOverlayView: NSView {
         numberOptionsStack.frame = numberOptionsBar.bounds
     }
 
+    private func configurePencilOptionsBar() {
+        pencilOptionsBar.appearance = NSAppearance(named: .aqua)
+        pencilOptionsBar.wantsLayer = true
+        pencilOptionsBar.layer?.backgroundColor = NSColor.white.cgColor
+        pencilOptionsBar.layer?.cornerRadius = 10
+        pencilOptionsBar.layer?.borderWidth = 0.5
+        pencilOptionsBar.layer?.borderColor = NSColor.black.withAlphaComponent(0.2).cgColor
+        pencilOptionsBar.isHidden = true
+        pencilOptionsStack.orientation = .horizontal
+        pencilOptionsStack.alignment = .centerY
+        pencilOptionsStack.spacing = 7
+        pencilOptionsStack.edgeInsets = NSEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        let label = NSTextField(labelWithString: "画笔颜色")
+        label.font = .systemFont(ofSize: 12, weight: .medium)
+        pencilOptionsStack.addArrangedSubview(label)
+        pencilColorSwatches = makeColorSwatches(toolName: "画笔", action: #selector(pencilColorSwatchTapped(_:)))
+        pencilColorSwatches.forEach { pencilOptionsStack.addArrangedSubview($0) }
+        pencilOptionsStack.setFrameSize(pencilOptionsStack.fittingSize)
+        pencilOptionsBar.addSubview(pencilOptionsStack)
+        addSubview(pencilOptionsBar)
+        updateTextStyleControls()
+    }
+
+    @objc private func pencilColorSwatchTapped(_ sender: NSButton) {
+        guard TextAnnotationPalette.colors.indices.contains(sender.tag) else { return }
+        annotationColor = TextAnnotationPalette.colors[sender.tag]
+        updateTextStyleControls()
+    }
+
+    private func layoutPencilOptionsBar() {
+        guard !pencilOptionsBar.isHidden else { return }
+        let size = pencilOptionsStack.fittingSize
+        let center = toolButtons[.pencil].map { convert($0.bounds, from: $0).midX } ?? toolbar.frame.midX
+        pencilOptionsBar.frame = CaptureToolbarLayout.frame(size: size, beside: toolbar.frame, in: bounds,
+            preferredCenterX: center, prefersBelow: toolbar.frame.midY < selectionRect.midY)
+        pencilOptionsStack.frame = pencilOptionsBar.bounds
+    }
+
     private func configureTextOptionsBar() {
         textOptionsBar.appearance = NSAppearance(named: .aqua)
         textOptionsBar.wantsLayer = true
@@ -1073,22 +1118,8 @@ final class SelectionOverlayView: NSView {
         textSizePopUp.widthAnchor.constraint(equalToConstant: 58).isActive = true
         textOptionsStack.addArrangedSubview(textSizePopUp)
 
-        for (index, color) in TextAnnotationPalette.colors.enumerated() {
-            let swatch = NSButton(title: "", target: self, action: #selector(textColorSwatchTapped(_:)))
-            swatch.isBordered = false
-            swatch.tag = index
-            swatch.wantsLayer = true
-            swatch.layer?.backgroundColor = nsColor(color).cgColor
-            swatch.layer?.cornerRadius = 4
-            swatch.toolTip = "文字颜色：" + TextAnnotationPalette.colorNames[index]
-            swatch.setAccessibilityLabel(swatch.toolTip)
-            swatch.setButtonType(.toggle)
-            swatch.imagePosition = .imageOnly
-            swatch.widthAnchor.constraint(equalToConstant: 30).isActive = true
-            swatch.heightAnchor.constraint(equalToConstant: 30).isActive = true
-            textColorSwatches.append(swatch)
-            textOptionsStack.addArrangedSubview(swatch)
-        }
+        textColorSwatches = makeColorSwatches(toolName: "文字", action: #selector(textColorSwatchTapped(_:)))
+        textColorSwatches.forEach { textOptionsStack.addArrangedSubview($0) }
 
         textOptionsStack.setFrameSize(textOptionsStack.fittingSize)
         textOptionsBar.addSubview(textOptionsStack)
@@ -1097,6 +1128,25 @@ final class SelectionOverlayView: NSView {
         textOptionsBar.addSubview(textHint)
         addSubview(textOptionsBar)
         updateTextStyleControls()
+    }
+
+    private func makeColorSwatches(toolName: String, action: Selector) -> [NSButton] {
+        TextAnnotationPalette.colors.enumerated().map { index, color in
+            let swatch = NSButton(title: "", target: self, action: action)
+            swatch.isBordered = false
+            swatch.tag = index
+            swatch.wantsLayer = true
+            swatch.layer?.backgroundColor = nsColor(color).cgColor
+            swatch.layer?.cornerRadius = 4
+            swatch.toolTip = toolName + "颜色：" + TextAnnotationPalette.colorNames[index]
+            swatch.setAccessibilityLabel(swatch.toolTip)
+            swatch.setButtonType(.toggle)
+            swatch.imagePosition = .imageOnly
+            swatch.alignment = .center
+            swatch.widthAnchor.constraint(equalToConstant: 30).isActive = true
+            swatch.heightAnchor.constraint(equalToConstant: 30).isActive = true
+            return swatch
+        }
     }
 
     @objc private func textColorSwatchTapped(_ sender: NSButton) {
@@ -1220,6 +1270,7 @@ final class SelectionOverlayView: NSView {
             if selectedTool != .text { clearTextSelection() }
             if selectedTool != .rectangle { clearRectangleSelection() }
             textOptionsBar.isHidden = selectedTool != .text
+            pencilOptionsBar.isHidden = selectedTool != .pencil
             numberOptionsBar.isHidden = selectedTool != .number
             arrowOptionsBar.isHidden = selectedTool != .arrow
             updateToolButtons()
@@ -1269,7 +1320,8 @@ final class SelectionOverlayView: NSView {
 
     private func updateTextStyleControls() {
         textSizePopUp.selectItem(at: annotationTextSize.rawValue)
-        for (index, swatch) in textColorSwatches.enumerated() {
+        for swatch in textColorSwatches + pencilColorSwatches {
+            let index = swatch.tag
             let selected = TextAnnotationPalette.colors[index] == annotationColor
             swatch.state = selected ? .on : .off
             // §5.6 / §5.7: white remains visible, and selection carries a checkmark.
