@@ -225,10 +225,6 @@ final class GIFRecordingStreamOutput: NSObject, SCStreamOutput, SCStreamDelegate
                 throw RecordingError.cannotCreateCacheFile
             }
             cacheHandle = try FileHandle(forWritingTo: cacheURL)
-            // Frames are streamed to disposable storage and read only after recording.
-            // Avoid filling the file cache and stalling capture under memory pressure.
-            // This is advisory: unsupported filesystems retain normal cached I/O.
-            _ = fcntl(cacheHandle.fileDescriptor, F_NOCACHE, 1)
         } catch {
             try? FileManager.default.removeItem(at: directory)
             throw error
