@@ -6,6 +6,44 @@
         <description>PinSnip stable updates</description>
         <language>zh-CN</language>
         <item>
+            <title>0.9.3</title>
+            <pubDate>Fri, 13 Nov 2026 12:54:41 +0800</pubDate>
+            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.9.3</link>
+            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.9.3</sparkle:fullReleaseNotesLink>
+            <sparkle:version>17</sparkle:version>
+            <sparkle:shortVersionString>0.9.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <description sparkle:format="markdown"><![CDATA[# PinSnip v0.9.3
+
+## 截图与标注
+
+- 优化截图到显示选区的流程。系统取图响应慢时，PinSnip 会尝试备用方式，使用先成功返回的画面。
+- 画笔可以直接选蓝、绿、黄、深灰、白、红六种颜色。换色只影响后续笔画。
+- 新建贴图会根据鼠标所在屏幕摆放，避免窗口超出可见区域。
+
+## 图片样式与动图分享
+
+- 图片样式新增多种渐变背景，共有七种固定配色，另有自动配色和原图。旧版的剪纸样式设置会迁移为暮色渐变。
+- 菜单栏新增「GIF 分享大小…」，可以选标准、小体积、原始大小或自定义。标准预设为 1280 × 1080 像素、15 MB 以内。
+- 分享用的动图会按需降低尺寸或帧率，保留完整播放时长、最后一帧和循环设置。保存或从晾衣架拖出时仍使用原文件。
+
+## 晾衣架
+
+- 退出或重启后会恢复暂存的截图、动图和排列顺序。截图不会因为数量达到上限而被自动删除。
+- 「一键清理」会把截图和动图移入本地归档。需要时可从菜单栏选择「恢复已取下的截图」。
+- 卡片按缩略图实际尺寸排列。晾衣架停在屏幕顶部时，鼠标移到最上沿即可展开。
+
+## 下载与安装
+
+推荐下载 **PinSnip-v0.9.3-macOS-universal.dmg**。打开后，把 **PinSnip** 拖入「应用程序」。
+
+- 支持 macOS 14 及以上，同一个安装包适用于 Apple 芯片和 Intel 芯片。
+- 安装包沿用 Developer ID（Apple 开发者签名），并通过 Apple 公证（分发前安全检查）。
+- ZIP 可手动解压安装，也用于应用内更新。`.sha256` 文件可用来核对下载文件是否完整。
+]]></description>
+            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.9.3/PinSnip-v0.9.3-macOS-universal.zip" length="3790450" type="application/octet-stream" sparkle:edSignature="xOvTpaar/OvXUx989dUm0KwBgDjcfOCRJJWmt0utnBw+XkB3mBasv+oz00Wq7iQi5n9AUiqtw5/mokvU72k7Dg=="/>
+        </item>
+        <item>
             <title>0.9.2</title>
             <pubDate>Fri, 23 Oct 2026 13:46:18 +0800</pubDate>
             <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.9.2</link>
@@ -252,33 +290,6 @@ PinSnip 是一款原生 macOS 截图、滚动截屏、GIF 录制与贴图工具�
 推荐下载 `PinSnip-v0.7.0-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
 ]]></description>
             <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.7.0/PinSnip-v0.7.0-macOS-universal.zip" length="3022540" type="application/octet-stream" sparkle:edSignature="5QQtk5FFklBElhCwCIQd26I13zwWIXuPL6xDvbjUGucHnwh+pcs6tytskzsBxVFlVL2dej48peA+sekDCEAwDQ=="/>
-        </item>
-        <item>
-            <title>0.6.0</title>
-            <pubDate>Fri, 31 Jul 2026 13:33:47 +0800</pubDate>
-            <link>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.6.0</link>
-            <sparkle:fullReleaseNotesLink>https://github.com/longhaiqwe/PinSnip/releases/tag/v0.6.0</sparkle:fullReleaseNotesLink>
-            <sparkle:version>7</sparkle:version>
-            <sparkle:shortVersionString>0.6.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <description sparkle:format="markdown"><![CDATA[## PinSnip v0.6.0
-
-### 新功能
-
-- 普通截图、滚动长图和录制动图在复制或保存时，统一生成适合社交媒体分享的卡片效果。
-- 滚动截屏和动图录制期间支持随时按 `Esc` 取消退出，即使当前焦点位于其他应用。
-
-### 改进
-
-- 滚动截屏控制面板改为紧凑、无标题栏的悬浮控制条。
-- 动图录制面板同步采用一致的紧凑样式与操作布局。
-- 直接贴图继续保留原始图像，避免改变既有贴图习惯。
-
-### 下载
-
-推荐下载 `PinSnip-v0.6.0-macOS-universal.dmg` 安装；同时支持 Apple 芯片和 Intel 芯片，要求 macOS 14 或更高版本。
-]]></description>
-            <enclosure url="https://github.com/longhaiqwe/PinSnip/releases/download/v0.6.0/PinSnip-v0.6.0-macOS-universal.zip" length="3001332" type="application/octet-stream" sparkle:edSignature="5C+P6WghoW+UZEK+ET4jOPAif8XOPQZYy2LR/3Mw3UJecQTDmO/2+39PayIS8yjh+9YTWPczN309NRjzXwnLBg=="/>
         </item>
         <item>
             <title>PinSnip 0.3.1</title>
