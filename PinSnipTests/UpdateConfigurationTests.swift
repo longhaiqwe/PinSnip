@@ -50,7 +50,7 @@ final class UpdateConfigurationTests: XCTestCase {
         )
     }
 
-    func testAppcastPublishesCurrentSignedVersion() throws {
+    func testAppcastPublishesSignedVersionNoNewerThanSource() throws {
         let appcast = try String(
             contentsOf: repositoryRoot.appendingPathComponent("appcast.xml"),
             encoding: .utf8
@@ -64,19 +64,29 @@ final class UpdateConfigurationTests: XCTestCase {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let project = try String(contentsOf: repositoryRoot.appendingPathComponent("project.yml"), encoding: .utf8)
         let buildLine = try XCTUnwrap(project.split(separator: "\n").first { $0.contains("CURRENT_PROJECT_VERSION:") })
-        let build = try XCTUnwrap(buildLine.split(separator: "\"").dropFirst().first)
-        XCTAssertTrue(currentItem.contains("<sparkle:version>\(build)</sparkle:version>"))
-        XCTAssertTrue(
-            currentItem.contains(
-                "<sparkle:shortVersionString>\(version)</sparkle:shortVersionString>"
-            )
+        let build = try XCTUnwrap(buildLine.split(separator: "\"").dropFirst().first.flatMap { Int($0) })
+        let publishedBuild = try XCTUnwrap(
+            appcastValue("sparkle:version", in: currentItem).flatMap { Int($0) }
         )
+        let publishedVersion = try XCTUnwrap(appcastValue("sparkle:shortVersionString", in: currentItem))
+
+        // Source can be one release ahead while its GitHub Release is a draft.
+        XCTAssertLessThanOrEqual(publishedBuild, build)
+        XCTAssertNotEqual(publishedVersion.compare(version, options: .numeric), .orderedDescending)
+        XCTAssertEqual(publishedVersion == version, publishedBuild == build)
         XCTAssertTrue(
             currentItem.contains(
-                "releases/download/v\(version)/PinSnip-v\(version)-macOS-universal.zip"
+                "releases/download/v\(publishedVersion)/PinSnip-v\(publishedVersion)-macOS-universal.zip"
             )
         )
         XCTAssertTrue(currentItem.contains("sparkle:edSignature="))
+    }
+
+    private func appcastValue(_ tag: String, in item: String) -> String? {
+        guard let start = item.range(of: "<\(tag)>")?.upperBound,
+              let end = item[start...].range(of: "</\(tag)>")?.lowerBound,
+              start < end else { return nil }
+        return String(item[start..<end])
     }
 
     func testAppcastReleaseNotesLinkResolvesToPublishedRelease() throws {
