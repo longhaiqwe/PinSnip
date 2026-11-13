@@ -6,6 +6,11 @@ import UniformTypeIdentifiers
 /// The media files are authoritative. The index only preserves the user's order.
 @MainActor
 final class ShelfStorage {
+    struct ArchivedItem {
+        let url: URL
+        fileprivate let item: ShelfItem
+    }
+
     static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("PinSnip/Shelf", isDirectory: true)
@@ -52,29 +57,55 @@ final class ShelfStorage {
         try JSONEncoder().encode(items.map(\.url.lastPathComponent)).write(to: orderURL, options: .atomic)
     }
 
-    func archive(_ item: ShelfItem) throws {
+    @discardableResult
+    func archive(_ item: ShelfItem) throws -> ArchivedItem? {
         guard item.url.deletingLastPathComponent().standardizedFileURL == directory.standardizedFileURL else {
             throw CocoaError(.fileWriteNoPermission)
         }
         // Finder may already have moved the original out of the shelf.
-        guard fileManager.fileExists(atPath: item.url.path) else { return }
+        guard fileManager.fileExists(atPath: item.url.path) else { return nil }
         try fileManager.createDirectory(at: archiveDirectory, withIntermediateDirectories: true)
-        try fileManager.moveItem(at: item.url, to: availableDestination(for: item.url, in: archiveDirectory))
+        let destination = availableDestination(for: item.url, in: archiveDirectory)
+        try fileManager.moveItem(at: item.url, to: destination)
+        return ArchivedItem(url: destination, item: item)
     }
 
     /// 单个文件失败不影响其他文件；调用方只移除已成功归档的卡片。
-    func archiveAll(_ items: [ShelfItem]) -> (archivedIDs: Set<UUID>, firstError: Error?) {
+    func archiveAll(_ items: [ShelfItem]) -> (archivedIDs: Set<UUID>, archivedItems: [UUID: ArchivedItem], firstError: Error?) {
         var archivedIDs = Set<UUID>()
+        var archivedItems: [UUID: ArchivedItem] = [:]
         var firstError: Error?
         for item in items {
             do {
-                try archive(item)
+                archivedItems[item.id] = try archive(item)
                 archivedIDs.insert(item.id)
             } catch {
                 if firstError == nil { firstError = error }
             }
         }
-        return (archivedIDs, firstError)
+        return (archivedIDs, archivedItems, firstError)
+    }
+
+    /// 只恢复指定批次的文件，不把历史归档一起挂回。
+    func restoreArchivedItem(_ archived: ArchivedItem) throws -> ShelfItem {
+        let url = archived.url
+        guard url.deletingLastPathComponent().standardizedFileURL == archiveDirectory.standardizedFileURL
+        else { throw CocoaError(.fileReadNoPermission) }
+        let fingerprint = ShelfItem.FileFingerprint(at: url)
+        let preview: ShelfItem
+        if let fingerprint, fingerprint == archived.item.fileFingerprint {
+            preview = archived.item
+        } else {
+            let values = try URL(fileURLWithPath: url.path).resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey])
+            guard values.isRegularFile == true, values.isSymbolicLink == false, let decoded = loadItem(at: url)
+            else { throw CocoaError(.fileReadCorruptFile) }
+            preview = decoded
+        }
+        let destination = availableDestination(for: url, in: directory)
+        guard let id = identifier(for: destination) else { throw CocoaError(.fileReadCorruptFile) }
+        try fileManager.moveItem(at: url, to: destination)
+        return ShelfItem(id: id, url: destination, thumb: preview.thumb, originalSize: preview.originalSize,
+                         tilt: archived.item.tilt, animatesOnAppearance: false)
     }
 
     func restoreArchived() throws {

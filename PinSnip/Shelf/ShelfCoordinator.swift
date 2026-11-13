@@ -16,13 +16,18 @@ final class ShelfCoordinator: ObservableObject {
     var isRevealed: Bool { visibility.isRevealed }
     @Published var copiedID: UUID?
     @Published var isDragging: Bool = false
+    @Published private(set) var canUndoRemoval = false
+    var onCaptureRequested: (() -> Void)?
+    private var lastRemoval: (order: [UUID], items: [UUID: ShelfStorage.ArchivedItem])?
 
     @Published private(set) var dropIndicator: CGPoint?
     private(set) var draggedItemID: UUID?
     var slotRects: [UUID: CGRect] = [:]
 
     var hitRects: [UUID: CGRect] = [:]
-    var controlsRect: CGRect = .zero
+    var controlsHitTest: ((CGPoint) -> Bool)?
+    @Published var viewportRect: CGRect = .zero
+    @Published private(set) var visibleItemIDs: Set<UUID> = []
 
     private var panel: ShelfPanel?
     private var mouseTimer: Timer?
@@ -31,6 +36,7 @@ final class ShelfCoordinator: ObservableObject {
     private var peekUntil: Date = .distantPast
     private var menuBarSuppressed: Bool = false
     private var clickMonitors: [Any] = []
+    private var keyboardInteractionActive = false
 
     weak var pinManager: PinWindowManager?
 
@@ -38,10 +44,16 @@ final class ShelfCoordinator: ObservableObject {
     private static let retractDelay: TimeInterval = 0.50
 
     private let storage: ShelfStorage
+    private let storageErrorHandler: ((Error) -> Void)?
 
-    init(edgeStore: ShelfEdgeStore = ShelfEdgeStore(), storage: ShelfStorage = ShelfStorage()) {
+    init(
+        edgeStore: ShelfEdgeStore = ShelfEdgeStore(),
+        storage: ShelfStorage = ShelfStorage(),
+        storageErrorHandler: ((Error) -> Void)? = nil
+    ) {
         self.edgeStore = edgeStore
         self.storage = storage
+        self.storageErrorHandler = storageErrorHandler
         edge = edgeStore.load()
     }
 
@@ -55,7 +67,6 @@ final class ShelfCoordinator: ObservableObject {
         slotRects = [:]
         clearDropIndicator()
         hitRects = [:]
-        controlsRect = .zero
         panel?.ignoresMouseEvents = true
         panel?.placeOnScreen(edge: edge)
         setRevealed(true)
@@ -89,7 +100,6 @@ final class ShelfCoordinator: ObservableObject {
         slotRects = [:]
         clearDropIndicator()
         hitRects = [:]
-        controlsRect = .zero
     }
 
     func shutdown() {
@@ -103,20 +113,31 @@ final class ShelfCoordinator: ObservableObject {
         panel = nil
     }
 
-    /// 切换展开/收起
-    func toggle() {
-        if isRevealed {
-            setRevealed(false)
-        } else {
-            panel?.placeOnScreen(edge: edge)
-            setRevealed(true)
-        }
+    func toggleForKeyboardInteraction() {
+        if isRevealed, panel?.isKeyWindow == true { setRevealed(false); panel?.resignKey() }
+        else { showForKeyboardInteraction() }
+    }
+
+    func showForKeyboardInteraction() {
+        panel?.placeOnScreen(edge: edge)
+        setRevealed(true)
+        keyboardInteractionActive = true
+        panel?.makeKeyAndOrderFront(nil)
+        panel?.selectNextKeyView(nil)
+    }
+
+    func updateVisibleItems() {
+        let visible = Set(slotRects.compactMap { id, frame in
+            frame.intersects(viewportRect) ? id : nil
+        })
+        if visibleItemIDs != visible { visibleItemIDs = visible }
     }
 
     func setRevealed(_ revealed: Bool) {
         guard isRevealed != revealed else { return }
         visibility.setRevealed(revealed)
         if !revealed {
+            keyboardInteractionActive = false
             panel?.ignoresMouseEvents = true
         }
     }
@@ -191,19 +212,26 @@ final class ShelfCoordinator: ObservableObject {
     }
 
     /// 将新截取的图像挂在晾衣架上
-    func hang(image: CGImage, fromScreenRect: CGRect? = nil) {
+    @discardableResult
+    func hang(image: CGImage, fromScreenRect: CGRect? = nil, reportError: Bool = true) -> Bool {
         do {
             append(try storage.storeImage(image))
+            return true
         } catch {
-            showStorageError(error)
+            if reportError { showStorageError(error) }
+            return false
         }
     }
 
-    func hangGIF(_ data: Data) {
+    @discardableResult
+    func hangGIF(_ data: Data, reportError: Bool = true) -> Bool {
         do {
+            try FileManager.default.createDirectory(at: storage.directory, withIntermediateDirectories: true)
             append(try ShelfItem.storeGIF(data, in: storage.directory))
+            return true
         } catch {
-            NSSound.beep()
+            if reportError { showStorageError(error) }
+            return false
         }
     }
 
@@ -221,12 +249,18 @@ final class ShelfCoordinator: ObservableObject {
     /// 复制卡片到剪贴板
     func copy(item: ShelfItem) {
         if item.isAnimated {
-            guard let data = try? Data(contentsOf: item.url) else { NSSound.beep(); return }
-            CaptureOutputService.copyGIF(data) { [weak self] succeeded in
-                if succeeded { self?.showCopiedFeedback(for: item.id) }
+            do {
+                let data = try Data(contentsOf: item.url)
+                CaptureOutputService.copyGIF(data) { [weak self] succeeded in
+                    if succeeded { self?.showCopiedFeedback(for: item.id) }
+                }
+            } catch {
+                showStorageError(error)
             }
         } else if item.copy(to: .general) {
             showCopiedFeedback(for: item.id)
+        } else {
+            showStorageError(CocoaError(.fileReadUnknown))
         }
     }
 
@@ -241,28 +275,38 @@ final class ShelfCoordinator: ObservableObject {
 
     /// 将卡片取下并转为桌面贴图 (PinWindow)
     func pinToDesktop(item: ShelfItem) {
-        if item.isAnimated {
-            guard let animation = item.loadAnimation(), let pinManager else { return }
-            pinManager.pin(animation)
+        guard let pinManager else { return }
+        do {
+            let data = try Data(contentsOf: item.url)
+            if item.isAnimated {
+                guard let animation = AnimatedImage(data: data) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                pinManager.pin(animation)
+            } else {
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
+                pinManager.pin(cgImage)
+            }
             discard(item: item)
-            return
+        } catch {
+            showStorageError(error)
         }
-        guard let data = try? Data(contentsOf: item.url),
-              let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
-        else { return }
-
-        pinManager?.pin(cgImage)
-        discard(item: item)
     }
 
     /// 从晾衣架取下，原文件归档以便恢复。
     func discard(item: ShelfItem) {
         do {
-            try storage.archive(item)
+            let order = items.map(\.id)
+            let archived = try storage.archive(item)
+            if let archived { rememberRemoval(order: order, items: [item.id: archived]) }
             items.removeAll { $0.id == item.id }
             persistOrder()
         } catch {
+            // 取下动画先隐藏卡片；归档失败时恢复显示和命中区域，允许重试。
+            item.isFalling = false
             showStorageError(error)
         }
     }
@@ -270,7 +314,9 @@ final class ShelfCoordinator: ObservableObject {
     /// 一次取下全部卡片，保留原文件，失败项继续留在架上。
     func clearAll() {
         guard !items.isEmpty, !isDragging else { return }
+        let order = items.map(\.id)
         let result = storage.archiveAll(items)
+        if !result.archivedItems.isEmpty { rememberRemoval(order: order, items: result.archivedItems) }
         items.removeAll { result.archivedIDs.contains($0.id) }
         copiedID = nil
         slotRects = slotRects.filter { !result.archivedIDs.contains($0.key) }
@@ -279,6 +325,36 @@ final class ShelfCoordinator: ObservableObject {
         persistOrder()
         peekUntil = Date().addingTimeInterval(3)
         if let error = result.firstError { showStorageError(error) }
+    }
+
+    private func rememberRemoval(order: [UUID], items: [UUID: ShelfStorage.ArchivedItem]) {
+        lastRemoval = (order, items)
+        canUndoRemoval = true
+    }
+
+    func undoLastRemoval() {
+        guard let removal = lastRemoval, !isDragging else { return }
+        var restored: [UUID: ShelfItem] = [:]
+        var failed: [UUID: ShelfStorage.ArchivedItem] = [:]
+        var firstError: Error?
+        for (id, archived) in removal.items {
+            do { restored[id] = try storage.restoreArchivedItem(archived) }
+            catch { failed[id] = archived; if firstError == nil { firstError = error } }
+        }
+        let existing = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        let priorIDs = Set(removal.order)
+        // 本次清理之后的新截图继续排在前面，恢复项沿用清理前的相对顺序。
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            items = items.filter { !priorIDs.contains($0.id) } + removal.order.compactMap { restored[$0] ?? existing[$0] }
+        }
+        lastRemoval = failed.isEmpty ? nil : (removal.order, failed)
+        canUndoRemoval = !failed.isEmpty
+        persistOrder()
+        setRevealed(true)
+        peekUntil = Date().addingTimeInterval(3)
+        if let firstError { showStorageError(firstError) }
     }
 
     /// 打开系统标注 (Markup)
@@ -398,6 +474,7 @@ final class ShelfCoordinator: ObservableObject {
         let inside = ShelfLayout.containsPointer(mouse, in: zone)
 
         let isBusy = isDragging || now < peekUntil || visibility.isHeldForCapture
+            || (keyboardInteractionActive && panel.isKeyWindow)
         if inside || isBusy {
             awaySince = nil
         } else {
@@ -412,13 +489,18 @@ final class ShelfCoordinator: ObservableObject {
 
     /// 卡片和操作按钮接收鼠标，其余空白区域穿透给底层应用。
     private func updateMousePassThrough(_ mouse: NSPoint) {
-        guard let panel, !isDragging else { return }
-        let local = panel.convertPoint(fromScreen: mouse)
-        let flipped = CGPoint(x: local.x, y: panel.frame.height - local.y)
+        guard let panel else { return }
+        updateMousePassThrough(mouse, in: panel)
+    }
+
+    func updateMousePassThrough(_ mouse: NSPoint, in panel: ShelfPanel) {
+        guard !isDragging, let content = panel.contentView else { return }
+        // 只通过 AppKit 转换一次，兼容窗口原点和内容视图的坐标方向。
+        let local = content.convert(panel.convertPoint(fromScreen: mouse), from: nil)
         let overCard = hitRects.values.contains {
-            $0.insetBy(dx: -4, dy: -4).contains(flipped)
+            $0.insetBy(dx: -4, dy: -4).contains(local)
         }
-        let interactive = overCard || controlsRect.contains(flipped)
+        let interactive = isRevealed && (overCard || (controlsHitTest?(local) ?? false))
         if panel.ignoresMouseEvents == interactive {
             panel.ignoresMouseEvents = !interactive
         }
@@ -442,6 +524,8 @@ final class ShelfCoordinator: ObservableObject {
         do { try storage.restoreArchived() }
         catch { showStorageError(error) }
         restoreStoredItems()
+        lastRemoval = nil
+        canUndoRemoval = false
         setRevealed(true)
         peekUntil = Date().addingTimeInterval(3)
     }
@@ -451,6 +535,10 @@ final class ShelfCoordinator: ObservableObject {
     }
 
     private func showStorageError(_ error: Error) {
+        if let storageErrorHandler {
+            storageErrorHandler(error)
+            return
+        }
         let alert = NSAlert(error: error)
         alert.messageText = "无法读写本地截图"
         alert.runModal()

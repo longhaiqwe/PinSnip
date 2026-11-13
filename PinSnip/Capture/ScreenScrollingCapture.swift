@@ -13,6 +13,17 @@ enum ScrollingCaptureOutputAction {
     case pin
 }
 
+enum ScrollingCaptureStopReason: Equatable {
+    case userFinished
+    case reachedLimit
+    case interrupted(message: String, frameCount: Int)
+
+    var interruptionMessage: String? {
+        guard case let .interrupted(message, frameCount) = self else { return nil }
+        return "本次仅包含成功拼接的 \(frameCount) 屏，后续内容尚未截取。\n读取屏幕失败：\(message)"
+    }
+}
+
 @MainActor
 final class ScreenScrollingCapture {
     static let maximumPixelCount = 24_000_000
@@ -22,19 +33,24 @@ final class ScreenScrollingCapture {
     private var assembler: ScrollingCaptureAssembler?
     private var captureTask: Task<Void, Never>?
     private var onProgress: ((Int, Int) -> Void)?
-    private var onStopRequested: (() -> Void)?
+    private var onStopRequested: ((ScrollingCaptureStopReason) -> Void)?
     private var onAlignmentLost: (() -> Void)?
     private var onManualScrollingRequired: (() -> Void)?
     private var frameCount = 0
     private var scrollLocation = CGPoint.zero
     private var scrollStep = 0
+    private let frameProvider: (() async throws -> CGImage)?
+
+    init(frameProvider: (() async throws -> CGImage)? = nil) {
+        self.frameProvider = frameProvider
+    }
 
     func start(
         screen: NSScreen,
         selectionRect: CGRect,
         mode: ScrollingCaptureMode,
         onProgress: @escaping (Int, Int) -> Void,
-        onStopRequested: @escaping () -> Void,
+        onStopRequested: @escaping (ScrollingCaptureStopReason) -> Void,
         onAlignmentLost: @escaping () -> Void = {},
         onManualScrollingRequired: @escaping () -> Void = {}
     ) async throws {
@@ -86,6 +102,20 @@ final class ScreenScrollingCapture {
         scrollStep = ScrollingCaptureScrollPlan.step(selectionHeight: selectionRect.height)
         self.filter = filter
         self.configuration = configuration
+        let firstImage = try await captureFrame()
+        try startCollecting(firstImage: firstImage, mode: mode, onProgress: onProgress,
+                            onStopRequested: onStopRequested, onAlignmentLost: onAlignmentLost,
+                            onManualScrollingRequired: onManualScrollingRequired)
+    }
+
+    func startCollecting(
+        firstImage: CGImage,
+        mode: ScrollingCaptureMode,
+        onProgress: @escaping (Int, Int) -> Void,
+        onStopRequested: @escaping (ScrollingCaptureStopReason) -> Void,
+        onAlignmentLost: @escaping () -> Void = {},
+        onManualScrollingRequired: @escaping () -> Void = {}
+    ) throws {
         self.onProgress = onProgress
         self.onStopRequested = onStopRequested
         self.onAlignmentLost = onAlignmentLost
@@ -95,7 +125,6 @@ final class ScreenScrollingCapture {
         )
         self.assembler = assembler
 
-        let firstImage = try await captureFrame()
         let firstResult = assembler.append(firstImage)
         guard case let .started(totalPixelHeight) = firstResult else {
             throw ScreenCaptureError.displayUnavailable
@@ -180,7 +209,7 @@ final class ScreenScrollingCapture {
                 }
 
             case .reachedLimit:
-                onStopRequested?()
+                onStopRequested?(.reachedLimit)
                 return
             case .unmatched:
                 if didScroll { onAlignmentLost?() }
@@ -199,7 +228,7 @@ final class ScreenScrollingCapture {
             guard !Task.isCancelled else { return }
             let result = await captureAndAppend(retryUnmatched: false)
             if case .reachedLimit = result {
-                onStopRequested?()
+                onStopRequested?(.reachedLimit)
                 return
             }
             if case .unmatched = result { onAlignmentLost?() }
@@ -219,7 +248,8 @@ final class ScreenScrollingCapture {
             }
             return report(result)
         } catch {
-            onStopRequested?()
+            guard !Task.isCancelled, !(error is CancellationError) else { return nil }
+            onStopRequested?(.interrupted(message: error.localizedDescription, frameCount: frameCount))
             return nil
         }
     }
@@ -235,6 +265,7 @@ final class ScreenScrollingCapture {
     }
 
     private func captureFrame() async throws -> CGImage {
+        if let frameProvider { return try await frameProvider() }
         guard let filter, let configuration else {
             throw ScreenCaptureError.displayUnavailable
         }

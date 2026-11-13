@@ -40,7 +40,7 @@ final class ScrollingCapturePanelController: NSWindowController {
             help: "贴长图到屏幕"
         )
         copyButton = Self.actionButton(
-            title: "完成",
+            title: "复制",
             symbol: "checkmark",
             help: "完成并复制分享长图"
         )
@@ -166,8 +166,8 @@ final class ScrollingCapturePanelController: NSWindowController {
 
     func showManualScrollingRequired() {
         mode = .manual
-        statusLabel.stringValue = "请手动滚动，结束点完成"
-        statusLabel.toolTip = "未检测到新的滚动内容，已切换为手动模式。把鼠标移到页面可滚动区域后缓慢滚动，截图会继续拼接；结束时点击完成、保存或贴图。"
+        statusLabel.stringValue = "请手动滚动，结束点复制"
+        statusLabel.toolTip = "未检测到新的滚动内容，已切换为手动模式。把鼠标移到页面可滚动区域后缓慢滚动，截图会继续拼接；结束时点击复制、保存或贴图。"
     }
 
     func showAlignmentLost() {
@@ -175,9 +175,9 @@ final class ScrollingCapturePanelController: NSWindowController {
         statusLabel.toolTip = "已保留成功拼接的部分。向上缓慢滚动以恢复重叠；对齐后会继续，也可保存当前结果。"
     }
 
-    func showExporting() {
+    func showExporting(isPartial: Bool = false) {
         borderController.dismiss()
-        statusLabel.stringValue = "正在生成分享长图…"
+        statusLabel.stringValue = isPartial ? "读取中断，正在保留已截部分…" : "正在生成分享长图…"
         applyControlState(.exporting)
     }
 

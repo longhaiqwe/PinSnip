@@ -15,6 +15,8 @@ public struct AnimatedImage {
 
     public let frames: [Frame]
     public let loopCount: Int
+    /// 保留原始动图，贴图复制与保存时不丢失帧、时长或循环设置。
+    public let sourceData: Data
 
     public var pixelWidth: Int { frames[0].image.width }
     public var pixelHeight: Int { frames[0].image.height }
@@ -33,6 +35,7 @@ public struct AnimatedImage {
 
         frames = decodedFrames
         loopCount = Self.loopCount(source: source)
+        sourceData = data
     }
 
     private static func frameDuration(source: CGImageSource, index: Int) -> TimeInterval {

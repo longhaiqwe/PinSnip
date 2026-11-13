@@ -13,13 +13,34 @@ final class ShelfItem: Identifiable, ObservableObject {
     let thumb: NSImage
     let originalSize: CGSize
     let tilt: Double
+    let animatesOnAppearance: Bool
+    let fileFingerprint: FileFingerprint?
 
     @Published var isFalling: Bool = false
-    @Published var isFlying: Bool = false
 
     var isAnimated: Bool { url.pathExtension.lowercased() == "gif" }
 
     enum StorageError: Error { case invalidGIF }
+
+    struct FileFingerprint: Equatable {
+        let identifier: NSObject
+        let modifiedAt: Date
+        let size: Int
+
+        init?(at url: URL) {
+            // Use a fresh URL so cached metadata cannot hide a replaced file.
+            guard let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [
+                .isRegularFileKey, .isSymbolicLinkKey, .fileResourceIdentifierKey,
+                .contentModificationDateKey, .fileSizeKey,
+            ]), values.isRegularFile == true, values.isSymbolicLink == false,
+                  let identifier = values.fileResourceIdentifier as? NSObject,
+                  let modifiedAt = values.contentModificationDate,
+                  let size = values.fileSize else { return nil }
+            self.identifier = identifier
+            self.modifiedAt = modifiedAt
+            self.size = size
+        }
+    }
 
     static func storeGIF(_ data: Data, in directory: URL) throws -> ShelfItem {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
@@ -79,12 +100,15 @@ final class ShelfItem: Identifiable, ObservableObject {
         url: URL,
         thumb: NSImage,
         originalSize: CGSize,
-        tilt: Double = Double.random(in: -2.5...2.5)
+        tilt: Double = Double.random(in: -2.5...2.5),
+        animatesOnAppearance: Bool = true
     ) {
         self.id = id
         self.url = url
         self.thumb = thumb
         self.originalSize = originalSize
         self.tilt = tilt
+        self.animatesOnAppearance = animatesOnAppearance
+        self.fileFingerprint = FileFingerprint(at: url)
     }
 }

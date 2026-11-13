@@ -743,6 +743,14 @@ final class SelectionOverlayView: NSView {
                 return
             }
             if deleteSelectedTextAnnotation() { return }
+            if let index = selectedRectangleIndex,
+               document.annotations.indices.contains(index),
+               case .rectangle = document.annotations[index], document.remove(at: index) {
+                clearRectangleSelection()
+                needsDisplay = true
+                window?.invalidateCursorRects(for: self)
+                return
+            }
         }
         if event.keyCode == 53 {
             onCancel()
@@ -947,6 +955,7 @@ final class SelectionOverlayView: NSView {
             arrowOptionsStack.addArrangedSubview(control)
         }
         updateArrowStyleControls()
+        arrowOptionsStack.setFrameSize(arrowOptionsStack.fittingSize)
         arrowOptionsBar.addSubview(arrowOptionsStack)
         addSubview(arrowOptionsBar)
     }
@@ -1898,6 +1907,10 @@ final class SelectionOverlayView: NSView {
     }
 
     private func finish(_ action: CaptureResultAction) {
+        guard selectionRect.width >= 3, selectionRect.height >= 3 else {
+            NSSound.beep()
+            return
+        }
         commitTextEditing()
         if case .recordGIF = action {
             onResult(

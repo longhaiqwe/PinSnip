@@ -23,7 +23,7 @@ final class ShelfPanel: NSPanel {
         contentView = content
     }
 
-    override var canBecomeKey: Bool { false }
+    override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     /// 获取光标当前所在的屏幕
@@ -54,6 +54,15 @@ final class ShelfHostingView: NSHostingView<ShelfView> {
     private var coordinator: ShelfCoordinator { rootView.coordinator }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 {
+            coordinator.setRevealed(false)
+            window?.resignKey()
+        } else if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers == "z" {
+            coordinator.undoLastRemoval()
+        } else { super.keyDown(with: event) }
+    }
 
     private func accepts(_ sender: NSDraggingInfo) -> Bool {
         guard let source = sender.draggingSource as? ShelfGrabView,

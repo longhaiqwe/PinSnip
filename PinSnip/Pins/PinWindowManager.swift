@@ -48,10 +48,7 @@ final class PinWindowManager {
 
     @discardableResult
     func pinClipboard(_ pasteboard: NSPasteboard = .general) -> Bool {
-        guard let payload = ClipboardReader.read(from: pasteboard) else {
-            NSSound.beep()
-            return false
-        }
+        guard let payload = ClipboardReader.read(from: pasteboard) else { return false }
 
         switch payload {
         case let .animatedImageData(data):
@@ -70,10 +67,7 @@ final class PinWindowManager {
             break
         }
 
-        guard let image = ClipboardCardRenderer.image(for: payload) else {
-            NSSound.beep()
-            return false
-        }
+        guard let image = ClipboardCardRenderer.image(for: payload) else { return false }
         pin(image)
         return true
     }

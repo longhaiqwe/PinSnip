@@ -2,23 +2,27 @@ import AppKit
 import PinSnipCore
 
 @MainActor
-final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDelegate {
+final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDelegate, NSWindowDelegate {
     private let store: GIFShareSettingsStore
     private let presets = NSPopUpButton(frame: .zero, pullsDown: false)
     private let widthField = NSTextField()
     private let heightField = NSTextField()
     private let bytesField = NSTextField()
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
+    private static var lastWindowFrame: NSRect?
 
     init(store: GIFShareSettingsStore = GIFShareSettingsStore()) {
         self.store = store
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 480, height: 390),
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 450),
                               styleMask: [.titled, .closable], backing: .buffered, defer: false)
         window.title = "GIF 分享大小"
         window.isReleasedWhenClosed = false
         super.init(window: window)
+        window.delegate = self
         configureContent()
         display(store.load())
+        if let frame = Self.lastWindowFrame { window.setFrame(frame, display: false) }
+        else { window.center() }
     }
 
     @available(*, unavailable)
@@ -26,7 +30,6 @@ final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDel
 
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
-        window?.center()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -46,17 +49,29 @@ final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDel
             field.widthAnchor.constraint(equalToConstant: 190).isActive = true
         }
         presets.setAccessibilityLabel("GIF 分享预设")
+        func input(_ field: NSTextField, hint: String) -> NSView {
+            field.setAccessibilityHelp(hint)
+            let range = NSTextField(labelWithString: hint)
+            range.font = .systemFont(ofSize: 11)
+            range.textColor = .secondaryLabelColor
+            let stack = NSStackView(views: [field, range])
+            stack.orientation = .vertical
+            stack.alignment = .leading
+            stack.spacing = 4
+            return stack
+        }
         let grid = NSGridView(views: [
             [NSTextField(labelWithString: "预设"), presets],
-            [NSTextField(labelWithString: "最大宽度（像素）"), widthField],
-            [NSTextField(labelWithString: "最大高度（像素）"), heightField],
-            [NSTextField(labelWithString: "体积上限（MB）"), bytesField]
+            [NSTextField(labelWithString: "最大宽度（像素）"), input(widthField, hint: "128–4096 的整数；0 不限制")],
+            [NSTextField(labelWithString: "最大高度（像素）"), input(heightField, hint: "128–4096 的整数；0 不限制")],
+            [NSTextField(labelWithString: "体积上限（MB）"), input(bytesField, hint: "0.1–50 MB；0 不限制")]
         ])
         grid.rowSpacing = 10
         grid.columnSpacing = 16
         grid.column(at: 0).xPlacement = .trailing
+        grid.yPlacement = .top
         grid.column(at: 1).xPlacement = .fill
-        let scope = NSTextField(wrappingLabelWithString: "用于录制完成后的复制和晾衣架复制。保存、直接拖出仍使用原文件；目标应用是否显示为动图取决于其自身规则。")
+        let scope = NSTextField(wrappingLabelWithString: "用于录制完成、晾衣架和桌面贴图中的复制。保存、直接拖出仍使用原文件；目标应用是否显示为动图取决于其自身规则。")
         scope.font = .systemFont(ofSize: 12)
         scope.textColor = .secondaryLabelColor
         errorLabel.textColor = .systemRed
@@ -102,7 +117,7 @@ final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDel
 
     @objc private func selectPreset() {
         let values: [GIFShareSettings] = [.standard, .compact, .original]
-        if presets.indexOfSelectedItem < values.count { display(values[presets.indexOfSelectedItem]) }
+        if values.indices.contains(presets.indexOfSelectedItem) { display(values[presets.indexOfSelectedItem]) }
     }
 
     func controlTextDidChange(_ obj: Notification) {
@@ -112,11 +127,17 @@ final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDel
 
     @objc private func save() {
         func trimmed(_ field: NSTextField) -> String { field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
-        guard let width = Int(trimmed(widthField)), let height = Int(trimmed(heightField)),
-              width == 0 || (128...4096).contains(width), height == 0 || (128...4096).contains(height),
-              let megabytes = Double(trimmed(bytesField)), megabytes.isFinite,
+        guard let width = Int(trimmed(widthField)), width == 0 || (128...4096).contains(width) else {
+            showError("最大宽度请输入 128–4096 的整数；0 表示不限制。", field: widthField)
+            return
+        }
+        guard let height = Int(trimmed(heightField)), height == 0 || (128...4096).contains(height) else {
+            showError("最大高度请输入 128–4096 的整数；0 表示不限制。", field: heightField)
+            return
+        }
+        guard let megabytes = Double(trimmed(bytesField)), megabytes.isFinite,
               megabytes == 0 || (0.1...50).contains(megabytes) else {
-            errorLabel.stringValue = "宽高请输入 128–4096 的整数，体积为 0.1–50 MB；0 表示不限制。"
+            showError("体积上限请输入 0.1–50 MB 的数值；0 表示不限制。", field: bytesField)
             return
         }
         store.save(GIFShareSettings(maximumWidth: width, maximumHeight: height,
@@ -124,5 +145,13 @@ final class GIFShareSettingsWindowController: NSWindowController, NSTextFieldDel
         close()
     }
 
+    private func showError(_ message: String, field: NSTextField) {
+        errorLabel.stringValue = message
+        window?.makeFirstResponder(field)
+        field.selectText(nil)
+    }
+
     @objc private func cancel() { close() }
+
+    func windowWillClose(_ notification: Notification) { Self.lastWindowFrame = window?.frame }
 }

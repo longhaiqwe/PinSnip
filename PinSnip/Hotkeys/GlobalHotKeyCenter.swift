@@ -15,8 +15,11 @@ final class GlobalHotKeyCenter: NSObject {
     private let handler: (Identifier) -> Void
     private var hotKeys: [Identifier: EventHotKeyRef] = [:]
     private var captureCancellationHotKey: EventHotKeyRef?
+    private var captureCancellationRequested = false
     private var eventHandler: EventHandlerRef?
     private var activeSettings: HotKeySettings?
+    private(set) var isShortcutRecording = false
+    private(set) var lastRegistrationFailures: [Identifier] = []
     private let signature: OSType = 0x504E5350
     private(set) var trackingMenus: [NSMenu] = []
     private var menuKeyMonitor: Any?
@@ -36,26 +39,44 @@ final class GlobalHotKeyCenter: NSObject {
 
     @discardableResult
     func register(_ settings: HotKeySettings) -> Bool {
+        lastRegistrationFailures = []
         guard settings.isValid else { return false }
         let previousSettings = activeSettings
 
         unregisterHotKeys()
         if registerAll(settings) {
             activeSettings = settings
-            if !trackingMenus.isEmpty { unregisterHotKeys() }
+            if !trackingMenus.isEmpty || isShortcutRecording { unregisterHotKeys() }
             return true
         }
 
+        let requestedFailures = lastRegistrationFailures
         unregisterHotKeys()
         if let previousSettings {
             if registerAll(previousSettings) {
                 activeSettings = previousSettings
+                if !trackingMenus.isEmpty || isShortcutRecording { unregisterHotKeys() }
             } else {
                 unregisterHotKeys()
                 activeSettings = nil
             }
         }
+        lastRegistrationFailures = requestedFailures
         return false
+    }
+
+    @discardableResult
+    func setShortcutRecordingEnabled(_ enabled: Bool) -> Bool {
+        guard enabled != isShortcutRecording else { return true }
+        isShortcutRecording = enabled
+        let cancellationRestored = setCaptureCancellationEnabled(captureCancellationRequested)
+        if enabled {
+            unregisterHotKeys()
+        } else if trackingMenus.isEmpty, let activeSettings, !registerAll(activeSettings) {
+            unregisterHotKeys()
+            return false
+        }
+        return cancellationRestored
     }
 
     func shutdown() {
@@ -67,6 +88,7 @@ final class GlobalHotKeyCenter: NSObject {
         setCaptureCancellationEnabled(false)
         unregisterHotKeys()
         activeSettings = nil
+        isShortcutRecording = false
         if let eventHandler {
             RemoveEventHandler(eventHandler)
             self.eventHandler = nil
@@ -103,7 +125,7 @@ final class GlobalHotKeyCenter: NSObject {
         trackingMenus.removeAll { $0 === menu }
         guard trackingMenus.isEmpty else { return }
         stopMenuMonitoring()
-        if let activeSettings, !registerAll(activeSettings) {
+        if !isShortcutRecording, let activeSettings, !registerAll(activeSettings) {
             NSLog("PinSnip: could not restore global shortcuts after menu tracking")
         }
     }
@@ -114,7 +136,8 @@ final class GlobalHotKeyCenter: NSObject {
     }
 
     private func menuIdentifier(for event: NSEvent) -> Identifier? {
-        guard !trackingMenus.isEmpty, event.type == .keyDown, let activeSettings else { return nil }
+        guard !isShortcutRecording, !trackingMenus.isEmpty,
+              event.type == .keyDown, let activeSettings else { return nil }
         // Only command/option/control/shift count; F-keys carry a synthesized Fn flag.
         let shortcut = HotKeyShortcut(event: event)
         if shortcut == activeSettings.capture { return .capture }
@@ -144,7 +167,8 @@ final class GlobalHotKeyCenter: NSObject {
 
     @discardableResult
     func setCaptureCancellationEnabled(_ isEnabled: Bool) -> Bool {
-        if !isEnabled {
+        captureCancellationRequested = isEnabled
+        if !isEnabled || isShortcutRecording {
             if let captureCancellationHotKey {
                 UnregisterEventHotKey(captureCancellationHotKey)
                 self.captureCancellationHotKey = nil
@@ -172,10 +196,12 @@ final class GlobalHotKeyCenter: NSObject {
     }
 
     private func registerAll(_ settings: HotKeySettings) -> Bool {
-        let capture = register(.capture, shortcut: settings.capture)
-        let recording = register(.recording, shortcut: settings.recording)
-        let paste = register(.paste, shortcut: settings.paste)
-        return capture && recording && paste
+        lastRegistrationFailures = []
+        for (identifier, shortcut) in [(Identifier.capture, settings.capture),
+                                       (.recording, settings.recording), (.paste, settings.paste)] {
+            if !register(identifier, shortcut: shortcut) { lastRegistrationFailures.append(identifier) }
+        }
+        return lastRegistrationFailures.isEmpty
     }
 
     private func unregisterHotKeys() {
@@ -223,7 +249,7 @@ final class GlobalHotKeyCenter: NSObject {
                 guard status == noErr else { return status }
                 let center = Unmanaged<GlobalHotKeyCenter>.fromOpaque(userData).takeUnretainedValue()
                 Task { @MainActor in
-                    if let identifier = Identifier(rawValue: hotKeyID.id) {
+                    if let identifier = Identifier(rawValue: hotKeyID.id), !center.isShortcutRecording {
                         center.handler(identifier)
                     }
                 }

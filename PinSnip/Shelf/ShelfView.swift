@@ -27,18 +27,14 @@ struct ShelfView: View {
                 }
                 .id(coordinator.edge)
                 .frame(height: contentHeight)
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(key: ShelfViewportRectKey.self,
+                        value: geometry.frame(in: .named("shelfPanel")))
+                })
                 // 横向保留卡片下方的阴影和“已复制”提示，最终由面板边界裁切。
                 .scrollClipDisabled(!vertical)
 
-                ShelfClearButton(isEnabled: !coordinator.items.isEmpty && !coordinator.isDragging) {
-                    coordinator.clearAll()
-                }
-                .background(GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: ShelfControlsRectKey.self,
-                        value: geometry.frame(in: .named("shelfPanel"))
-                    )
-                })
+                ShelfActions(coordinator: coordinator)
                 .frame(maxWidth: .infinity)
                 .frame(height: ShelfLayout.controlsHeight)
             }
@@ -69,9 +65,11 @@ struct ShelfView: View {
         .clipped()
         .onPreferenceChange(ShelfSlotRectsKey.self) { rects in
             coordinator.slotRects = rects
+            coordinator.updateVisibleItems()
         }
-        .onPreferenceChange(ShelfControlsRectKey.self) { rect in
-            coordinator.controlsRect = rect
+        .onPreferenceChange(ShelfViewportRectKey.self) { rect in
+            if coordinator.viewportRect != rect { coordinator.viewportRect = rect }
+            coordinator.updateVisibleItems()
         }
         .onPreferenceChange(ShelfHitRectsKey.self) { rects in
             coordinator.hitRects = rects
@@ -108,7 +106,7 @@ struct ShelfView: View {
                 ShelfCardView(
                     item: item,
                     isCopied: coordinator.copiedID == item.id,
-                    isShelfRevealed: coordinator.isRevealed,
+                    isShelfRevealed: coordinator.isRevealed && coordinator.visibleItemIDs.contains(item.id),
                     onCopy: { coordinator.copy(item: item) },
                     onPin: { coordinator.pinToDesktop(item: item) },
                     onMarkup: { coordinator.openMarkup(item: item) },
@@ -177,7 +175,7 @@ struct ShelfRope: View {
 
 private struct ShelfHint: View {
     var body: some View {
-        Text("截图将悬挂在此处，触手可及")
+        Text("还没有截图\n点击“开始截图”，完成后会保存在这里")
             .font(.system(size: 12, weight: .medium, design: .rounded))
             .foregroundColor(.secondary)
             .multilineTextAlignment(.center)
@@ -196,28 +194,10 @@ struct ShelfSlotRectsKey: PreferenceKey {
     }
 }
 
-/// 图标和文字整体居中，清理后可从菜单栏恢复。
-struct ShelfClearButton: View {
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Label("一键清理", systemImage: "tray.and.arrow.down")
-                .font(.system(size: 12, weight: .medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .foregroundStyle(isEnabled ? .primary : .secondary)
-                .background(.regularMaterial, in: Capsule())
-                .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .help("取下全部截图与动图，原文件保留，可从菜单栏恢复")
-    }
-}
-
-private struct ShelfControlsRectKey: PreferenceKey {
+private struct ShelfViewportRectKey: PreferenceKey {
     static let defaultValue: CGRect = .zero
-    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) {
+        let next = nextValue()
+        if !next.isEmpty { value = next }
+    }
 }

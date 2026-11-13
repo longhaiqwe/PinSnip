@@ -30,16 +30,17 @@ struct ShelfCardView: View {
     private static let cardInset = ShelfLayout.cardInset
 
     var body: some View {
+        let isInPosition = arrived || !item.animatesOnAppearance
         VStack(spacing: -ShelfLayout.clipOverlap) {
             ShelfClothespin()
                 .zIndex(1)
             cardContent
         }
         .rotationEffect(.degrees(swing + item.tilt), anchor: .top)
-        .offset(y: arrived ? 0 : -46)
-        .opacity(item.isFalling ? 0 : (arrived ? 1 : 0))
+        .offset(y: isInPosition ? 0 : -46)
+        .opacity(!item.isFalling && isInPosition ? 1 : 0)
         .onAppear {
-            arrive()
+            if item.animatesOnAppearance { arrive() }
         }
         .onChange(of: isCopied) { _, copied in
             if copied {
@@ -61,11 +62,13 @@ struct ShelfCardView: View {
                 isPlaying: isShelfRevealed && !item.isFalling
             )
             .allowsHitTesting(false)
+            .accessibilityHidden(true)
         } else {
             Image(nsImage: item.thumb)
                 .resizable()
                 .interpolation(.high)
                 .scaledToFit()
+                .accessibilityHidden(true)
         }
     }
 

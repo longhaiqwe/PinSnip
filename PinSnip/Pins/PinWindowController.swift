@@ -2,8 +2,9 @@ import AppKit
 import PinSnipCore
 
 @MainActor
-final class PinWindowController: NSWindowController, NSWindowDelegate {
+final class PinWindowController: NSWindowController, NSWindowDelegate, NSMenuDelegate {
     private let image: CGImage
+    private let animation: AnimatedImage?
     private let imageView: PinImageView
     private let baseSize: NSSize
     private(set) var transformState = PinTransform()
@@ -22,6 +23,7 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
 
     private init(image: CGImage, animation: AnimatedImage?, frame: NSRect) {
         self.image = image
+        self.animation = animation
         self.imageView = if let animation {
             PinImageView(animation: animation)
         } else {
@@ -104,7 +106,11 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func toggleClickThrough() {
-        window?.ignoresMouseEvents.toggle()
+        guard let window else { return }
+        window.ignoresMouseEvents.toggle()
+        if window.ignoresMouseEvents {
+            TransientFeedback.show(message: "已开启鼠标穿透。可在 PinSnip 菜单栏选择「截图与贴图管理 → 关闭贴图鼠标穿透」。")
+        }
     }
 
     @objc private func toggleTopmost() {
@@ -113,11 +119,27 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
     }
 
     @objc private func copyImage() {
-        CaptureOutputService.copyRendered(image)
+        copyOriginal()
     }
 
     @objc private func saveImage() {
-        CaptureOutputService.saveRendered(image)
+        if let animation {
+            CaptureOutputService.saveGIF(animation.sourceData)
+        } else {
+            CaptureOutputService.saveRendered(image)
+        }
+    }
+
+    func copyOriginal(
+        to pasteboard: NSPasteboard = .general,
+        completion: @escaping (Bool) -> Void = { _ in }
+    ) {
+        if let animation {
+            CaptureOutputService.copyGIF(animation.sourceData, to: pasteboard, completion: completion)
+        } else {
+            CaptureOutputService.copyRendered(image, to: pasteboard)
+            completion(true)
+        }
     }
 
     @objc private func closePin() {
@@ -168,6 +190,7 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
 
     private func installMenu() {
         let menu = NSMenu()
+        menu.delegate = self
         menu.addItem(item("顺时针旋转", action: #selector(rotateClockwise), key: "1"))
         menu.addItem(item("逆时针旋转", action: #selector(rotateCounterclockwise), key: "2"))
         menu.addItem(item("水平镜像", action: #selector(flipHorizontal), key: "3"))
@@ -178,17 +201,37 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
             menuItem.tag = value
             opacity.addItem(menuItem)
         }
-        let opacityItem = NSMenuItem(title: "透明度", action: nil, keyEquivalent: "")
+        let opacityItem = NSMenuItem(title: "不透明度", action: nil, keyEquivalent: "")
         opacityItem.submenu = opacity
         menu.addItem(opacityItem)
         menu.addItem(.separator())
-        menu.addItem(item("鼠标穿透", action: #selector(toggleClickThrough), key: "x"))
-        menu.addItem(item("切换置顶", action: #selector(toggleTopmost)))
+        let clickThrough = item("鼠标穿透", action: #selector(toggleClickThrough), key: "x")
+        clickThrough.toolTip = "开启后可从菜单栏「截图与贴图管理」关闭鼠标穿透"
+        menu.addItem(clickThrough)
+        menu.addItem(item("置顶", action: #selector(toggleTopmost)))
         menu.addItem(.separator())
-        menu.addItem(item("复制原图", action: #selector(copyImage)))
-        menu.addItem(item("保存原图…", action: #selector(saveImage)))
+        menu.addItem(item(animation == nil ? "复制原图" : "复制原动图", action: #selector(copyImage)))
+        menu.addItem(item(animation == nil ? "保存原图…" : "保存原动图…", action: #selector(saveImage)))
         menu.addItem(item("关闭贴图", action: #selector(closePin), key: "w"))
         imageView.menu = menu
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let opacity = transformState.opacity * 100
+        for entry in menu.items {
+            switch entry.action {
+            case #selector(flipHorizontal): entry.state = transformState.isFlippedHorizontally ? .on : .off
+            case #selector(flipVertical): entry.state = transformState.isFlippedVertically ? .on : .off
+            case #selector(toggleTopmost): entry.state = window?.level == .floating ? .on : .off
+            case #selector(toggleClickThrough): entry.state = isClickThroughEnabled ? .on : .off
+            default:
+                guard let choices = entry.submenu else { continue }
+                entry.title = "不透明度（\(Int(opacity.rounded()))%）"
+                for choice in choices.items {
+                    choice.state = abs(opacity - CGFloat(choice.tag)) < 0.001 ? .on : .off
+                }
+            }
+        }
     }
 
     private func item(_ title: String, action: Selector, key: String = "") -> NSMenuItem {

@@ -34,9 +34,15 @@ final class CaptureCoordinator {
     private var scrollingCapturePanel: ScrollingCapturePanelController?
     private var captureHistory = CaptureHistory<Data>(limit: 10)
     private var historyPasteboardChangeCount: Int?
+    private(set) var isExportingCapture = false
+    private var gifRecoveryWindows: [UUID: GIFOutputRecoveryController] = [:]
 
     var onCaptureCancellationAvailabilityChanged: ((Bool) -> Void)?
     var onShelfCaptureActivityChanged: ((Bool) -> Void)?
+
+    var hasUnexportedGIFs: Bool {
+        gifRecoveryWindows.values.contains { $0.needsDiscardConfirmation }
+    }
 
     init(
         pinManager: PinWindowManager,
@@ -94,10 +100,12 @@ final class CaptureCoordinator {
         purpose: CaptureOverlayPurpose,
         trackingMenus: [NSMenu] = []
     ) {
-        guard !isPreparingGIFRecording, gifRecorder == nil,
+        guard !isExportingCapture,
+              !isPreparingGIFRecording, gifRecorder == nil,
               !isPreparingScrollingCapture, scrollingCapture == nil,
               let sessionID = captureSessionState.begin()
         else { return }
+        TransientFeedback.dismiss()
         guard permissionGate.ensureAuthorized() else {
             captureSessionState.captureFinished(sessionID)
             captureSessionState.end(sessionID)
@@ -330,9 +338,12 @@ final class CaptureCoordinator {
             let copiedImage = CaptureOutputService.copy(image, style: shareStyle, borderSize: borderSize)
             rememberCapturedScreenshot(copiedImage)
         case .save:
-            if let savedImage = CaptureOutputService.save(image, style: shareStyle, borderSize: borderSize) {
-                rememberCapturedScreenshot(savedImage)
-            }
+            let savedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
+            // Keep the finished capture before opening a dismissible save panel.
+            // Cancelling or failing to write must not discard the user's work.
+            let isOnShelf = rememberCapturedScreenshot(savedImage)
+            let result = CaptureOutputService.saveRenderedResult(savedImage, panelTitle: "保存分享图", filenamePrefix: "PinSnip")
+            showSaveFeedback(result, isOnShelf: isOnShelf)
         case .pin:
             let pinnedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
             pinManager.pin(pinnedImage)
@@ -398,13 +409,13 @@ final class CaptureCoordinator {
     }
 
     private func stopGIFRecording(action: GIFRecordingOutputAction) {
-        guard let recorder = gifRecorder else { return }
+        guard !isExportingCapture, let recorder = gifRecorder else { return }
         gifPreparationTask?.cancel()
         gifPreparationTask = nil
         onCaptureCancellationAvailabilityChanged?(false)
         let completionPlan = GIFRecordingCompletionPlan(action: action)
         gifRecordingPanel?.showExporting()
-        Task {
+        performCaptureExport { [self] in
             let data = await recorder.stop(style: shareStyle, borderSize: borderSize)
             onShelfCaptureActivityChanged?(false)
             gifRecordingPanel?.finish()
@@ -416,13 +427,16 @@ final class CaptureCoordinator {
                 presentGIFEncodingError()
                 return
             }
-            ShelfCoordinator.shared.hangGIF(data)
+            let isOnShelf = ShelfCoordinator.shared.hangGIF(data, reportError: false)
+            let result: CaptureOutputResult
             if completionPlan.copiesToClipboard {
-                CaptureOutputService.copyGIF(data)
+                result = await withCheckedContinuation { continuation in
+                    CaptureOutputService.copyGIFResult(data) { continuation.resume(returning: $0) }
+                }
+            } else {
+                result = CaptureOutputService.saveGIFResult(data)
             }
-            if completionPlan.presentsSavePanel {
-                _ = CaptureOutputService.saveGIF(data)
-            }
+            handleGIFOutput(data, result: result, isOnShelf: isOnShelf)
         }
     }
 
@@ -466,8 +480,8 @@ final class CaptureCoordinator {
                             pixelHeight: pixelHeight
                         )
                     },
-                    onStopRequested: { [weak self] in
-                        self?.stopScrollingCapture(action: .copy)
+                    onStopRequested: { [weak self] reason in
+                        self?.stopScrollingCapture(action: .copy, reason: reason)
                     },
                     onAlignmentLost: { [weak self] in
                         self?.scrollingCapturePanel?.showAlignmentLost()
@@ -498,15 +512,18 @@ final class CaptureCoordinator {
         }
     }
 
-    private func stopScrollingCapture(action: ScrollingCaptureOutputAction) {
-        guard let capture = scrollingCapture else { return }
+    private func stopScrollingCapture(
+        action: ScrollingCaptureOutputAction,
+        reason: ScrollingCaptureStopReason = .userFinished
+    ) {
+        guard !isExportingCapture, let capture = scrollingCapture else { return }
         scrollingPreparationTask?.cancel()
         scrollingPreparationTask = nil
         onCaptureCancellationAvailabilityChanged?(false)
-        scrollingCapture = nil
-        scrollingCapturePanel?.showExporting()
-        Task {
+        scrollingCapturePanel?.showExporting(isPartial: reason.interruptionMessage != nil)
+        performCaptureExport { [self] in
             let image = await capture.stop()
+            scrollingCapture = nil
             scrollingCapturePanel?.finish()
             scrollingCapturePanel = nil
             isPreparingScrollingCapture = false
@@ -520,15 +537,63 @@ final class CaptureCoordinator {
                 let copiedImage = CaptureOutputService.copyScrollingCapture(image, style: shareStyle, borderSize: borderSize)
                 rememberCapturedScreenshot(copiedImage)
             case .save:
-                if let savedImage = CaptureOutputService.saveScrollingCapture(image, style: shareStyle, borderSize: borderSize) {
-                    rememberCapturedScreenshot(savedImage)
-                }
+                let savedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
+                let isOnShelf = rememberCapturedScreenshot(savedImage)
+                let result = CaptureOutputService.saveRenderedResult(savedImage, panelTitle: "保存分享长图", filenamePrefix: "PinSnip 长截图")
+                showSaveFeedback(result, isOnShelf: isOnShelf)
             case .pin:
                 let pinnedImage = CaptureOutputService.render(image, style: shareStyle, borderSize: borderSize)
                 pinManager.pin(pinnedImage)
                 rememberCapturedScreenshot(pinnedImage)
             }
+            if let message = reason.interruptionMessage {
+                let alert = NSAlert()
+                alert.alertStyle = .warning
+                alert.messageText = "滚动截屏中断，已生成部分长图"
+                alert.informativeText = message
+                alert.addButton(withTitle: "好")
+                _ = runForeground(alert)
+            } else if reason == .reachedLimit {
+                TransientFeedback.show(message: "已达到长图大小上限，本次结果已生成。")
+            }
         }
+    }
+
+    private func showSaveFeedback(_ result: CaptureOutputResult, isOnShelf: Bool) {
+        if let message = CaptureSaveFeedback.message(for: result, isOnShelf: isOnShelf) {
+            TransientFeedback.show(message: message)
+        }
+    }
+
+    private func handleGIFOutput(_ data: Data, result: CaptureOutputResult, isOnShelf: Bool) {
+        if result.succeeded {
+            if !isOnShelf { TransientFeedback.show(message: "动图已导出，但未能保留在晾衣架。") }
+            return
+        }
+        if case .cancelled = result, isOnShelf {
+            if let message = CaptureSaveFeedback.message(for: result, isOnShelf: true, isGIF: true) {
+                TransientFeedback.show(message: message)
+            }
+            return
+        }
+        let id = UUID()
+        let controller = GIFOutputRecoveryController(data: data, result: result, isOnShelf: isOnShelf)
+        controller.onFinish = { [weak self] in self?.gifRecoveryWindows[id] = nil }
+        gifRecoveryWindows[id] = controller
+        controller.present()
+    }
+
+    /// Hold the capture slot until asynchronous encoding and output have finished.
+    /// Stream callbacks and panel actions can request completion in the same turn.
+    @discardableResult
+    func performCaptureExport(_ operation: @escaping @MainActor () async -> Void) -> Bool {
+        guard !isExportingCapture else { return false }
+        isExportingCapture = true
+        Task {
+            defer { isExportingCapture = false }
+            await operation()
+        }
+        return true
     }
 
     func pinNextCapturedScreenshot(
@@ -550,21 +615,21 @@ final class CaptureCoordinator {
             return .pinned
         }
 
-        NSSound.beep()
         return .historyExhausted
     }
 
+    @discardableResult
     private func rememberCapturedScreenshot(
         _ image: CGImage,
         pasteboard: NSPasteboard = .general
-    ) {
+    ) -> Bool {
         let representation = NSBitmapImageRep(cgImage: image)
         guard let data = representation.representation(using: .png, properties: [:]) else {
-            return
+            return false
         }
         captureHistory.record(data)
         historyPasteboardChangeCount = pasteboard.changeCount
-        ShelfCoordinator.shared.hang(image: image)
+        return ShelfCoordinator.shared.hang(image: image)
     }
 
     private func cancelScrollingCapture() {
@@ -591,6 +656,7 @@ final class CaptureCoordinator {
     }
 
     func cancelActiveCapture() {
+        guard !isExportingCapture else { return }
         if gifRecorder != nil || isPreparingGIFRecording {
             cancelGIFRecording()
             return

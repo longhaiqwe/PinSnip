@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import XCTest
 import PinSnipCore
 
@@ -151,6 +152,55 @@ final class MenuHotKeyTests: XCTestCase {
         XCTAssertEqual(received, [.recording])
         // Remove an unhandled test event on the failing baseline.
         _ = NSApp.nextEvent(matching: .keyDown, until: nil, inMode: .eventTracking, dequeue: true)
+    }
+
+    @MainActor
+    func testRecordingAShortcutSuspendsMenuActionsUntilRecordingEnds() {
+        _ = NSApplication.shared
+        var received: [GlobalHotKeyCenter.Identifier] = []
+        let center = GlobalHotKeyCenter { received.append($0) }
+        defer { center.shutdown() }
+        XCTAssertTrue(center.register(.standard))
+        let menu = NSMenu()
+        NotificationCenter.default.post(name: NSMenu.didBeginTrackingNotification, object: menu)
+        defer { NotificationCenter.default.post(name: NSMenu.didEndTrackingNotification, object: menu) }
+
+        XCTAssertTrue(center.setShortcutRecordingEnabled(true))
+        NSApp.sendEvent(key(122, flags: [.function]))
+        NSApp.sendEvent(key(99, flags: [.function]))
+        XCTAssertTrue(received.isEmpty)
+
+        XCTAssertTrue(center.setShortcutRecordingEnabled(false))
+        NSApp.sendEvent(key(122, flags: [.function]))
+        XCTAssertEqual(received, [.capture])
+    }
+
+    @MainActor
+    func testRegistrationFailureNamesTheBlockedActionAfterRestoringPreviousShortcuts() throws {
+        _ = NSApplication.shared
+        var occupied: EventHotKeyRef?
+        let status = RegisterEventHotKey(64, UInt32(controlKey | optionKey),
+            EventHotKeyID(signature: 0x55585453, id: 1), GetApplicationEventTarget(), 0, &occupied)
+        guard status == noErr, let occupied else {
+            throw XCTSkip("Cannot reserve the isolated conflict fixture on this Mac")
+        }
+        defer { UnregisterEventHotKey(occupied) }
+        let center = GlobalHotKeyCenter { _ in }
+        defer { center.shutdown() }
+        let original = HotKeySettings(
+            capture: HotKeyShortcut(keyCode: 79, modifiers: [.control, .option]),
+            recording: HotKeyShortcut(keyCode: 80, modifiers: [.control, .option]),
+            paste: HotKeyShortcut(keyCode: 90, modifiers: [.control, .option]))
+        guard center.register(original) else {
+            throw XCTSkip("Isolated test shortcuts are already in use on this Mac")
+        }
+
+        XCTAssertFalse(center.register(HotKeySettings(capture: original.capture,
+            recording: HotKeyShortcut(keyCode: 64, modifiers: [.control, .option]), paste: original.paste)))
+        XCTAssertEqual(center.lastRegistrationFailures, [.recording],
+            "Restoring old shortcuts must not clear the reason the edited shortcut failed")
+        XCTAssertTrue(center.register(original))
+        XCTAssertTrue(center.lastRegistrationFailures.isEmpty)
     }
 
     @MainActor

@@ -7,9 +7,14 @@ final class HotKeyRecorderControl: NSButton {
     var shortcut: HotKeyShortcut {
         didSet { updateTitle() }
     }
+    var onRecordingChanged: (() -> Void)?
+    var onShortcutChanged: (() -> Void)?
 
-    private var isRecording = false {
-        didSet { updateTitle() }
+    private(set) var isRecording = false {
+        didSet {
+            updateTitle()
+            if isRecording != oldValue { onRecordingChanged?() }
+        }
     }
 
     init(shortcut: HotKeyShortcut) {
@@ -19,7 +24,7 @@ final class HotKeyRecorderControl: NSButton {
         setButtonType(.momentaryPushIn)
         target = self
         action = #selector(beginRecording)
-        toolTip = "点击后按下新的快捷键"
+        toolTip = "点击后按下新的快捷键；Esc 取消本次录入"
         setAccessibilityLabel("快捷键")
         updateTitle()
     }
@@ -31,11 +36,22 @@ final class HotKeyRecorderControl: NSButton {
 
     override var acceptsFirstResponder: Bool { true }
 
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard isRecording, event.type == .keyDown else {
+            return super.performKeyEquivalent(with: event)
+        }
+        // Capture Return, Escape and Command combinations before window buttons
+        // or menus interpret them as save, cancel or another action.
+        keyDown(with: event)
+        return true
+    }
+
     override func keyDown(with event: NSEvent) {
         guard isRecording else {
             super.keyDown(with: event)
             return
         }
+        guard !event.isARepeat else { return }
         if Int(event.keyCode) == kVK_Escape {
             isRecording = false
             return
@@ -50,6 +66,7 @@ final class HotKeyRecorderControl: NSButton {
 
         shortcut = candidate
         isRecording = false
+        onShortcutChanged?()
     }
 
     override func resignFirstResponder() -> Bool {
@@ -58,8 +75,12 @@ final class HotKeyRecorderControl: NSButton {
     }
 
     @objc private func beginRecording() {
-        window?.makeFirstResponder(self)
+        guard window?.makeFirstResponder(self) == true else { return }
         isRecording = true
+    }
+
+    func cancelRecording() {
+        isRecording = false
     }
 
     private func updateTitle() {

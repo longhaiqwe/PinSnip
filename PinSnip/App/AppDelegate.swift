@@ -39,6 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private var recordingMenuItem: NSMenuItem?
     private var pasteMenuItem: NSMenuItem?
     private var launchAtLoginMenuItem: NSMenuItem?
+    private var updatesMenuItem: NSMenuItem?
     private var checkForUpdatesMenuItem: NSMenuItem?
     private var automaticUpdateChecksMenuItem: NSMenuItem?
     private var automaticUpdateDownloadsMenuItem: NSMenuItem?
@@ -70,12 +71,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         if !hotKeys.register(hotKeySettings) {
             showHotKeyWarning(for: hotKeySettings)
         }
+        ShelfCoordinator.shared.onCaptureRequested = { [weak self] in self?.router.perform(.capture) }
         ShelfCoordinator.shared.start(pinManager: pinManager)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         ShelfCoordinator.shared.shutdown()
         hotKeyCenter?.shutdown()
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard captureCoordinator.isExportingCapture || captureCoordinator.hasUnexportedGIFs else { return .terminateNow }
+        let alert = NSAlert()
+        if captureCoordinator.isExportingCapture {
+            alert.messageText = "正在处理截图或动图"
+            alert.informativeText = "请完成当前输出后再退出 PinSnip。"
+            alert.addButton(withTitle: "好")
+            alert.runModal()
+            return .terminateCancel
+        }
+        alert.alertStyle = .warning
+        alert.messageText = "还有动图未导出"
+        alert.informativeText = "返回后可在动图窗口重试复制或另存为。退出会丢弃尚未存入晾衣架的动图。"
+        alert.addButton(withTitle: "返回继续处理")
+        let discard = alert.addButton(withTitle: "丢弃并退出")
+        discard.hasDestructiveAction = true
+        return alert.runModal() == .alertSecondButtonReturn ? .terminateNow : .terminateCancel
     }
 
     @objc private func capture() { router.perform(.capture) }
@@ -96,7 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         router.perform(.toggleLaunchAtLogin)
     }
     @objc private func toggleShelf() {
-        ShelfCoordinator.shared.toggle()
+        ShelfCoordinator.shared.toggleForKeyboardInteraction()
     }
     @objc private func openShelfStorage() {
         ShelfCoordinator.shared.openStorageFolder()
@@ -120,6 +141,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     @objc private func restoreInteraction() { pinManager.makeAllInteractive() }
 
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleAutomaticUpdateDownloads) {
+            return updateMenuState.canToggleAutomaticDownloads
+        }
         guard menuItem.action == #selector(restoreInteraction) else { return true }
         return pinManager.hasClickThroughPins
     }
@@ -184,6 +208,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         }
         let controller = HotKeySettingsWindowController(
             settings: hotKeySettings,
+            recordingStateChanged: { [weak self] isRecording in
+                guard let self else { return }
+                if self.hotKeyCenter?.setShortcutRecordingEnabled(isRecording) == false {
+                    DispatchQueue.main.async { [weak self] in
+                        guard let self else { return }
+                        self.showHotKeyWarning(for: self.hotKeySettings)
+                    }
+                }
+            },
+            registrationFailures: { [weak self] in self?.hotKeyCenter?.lastRegistrationFailures ?? [] },
             applyHandler: { [weak self] settings in
                 self?.applyHotKeySettings(settings) ?? false
             }
@@ -200,11 +234,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         case .recordAnimatedGIF: captureCoordinator.startGIFRecordingSelection(trackingMenus: hotKeyCenter?.trackingMenus ?? [])
         case .captureLastRegion: captureCoordinator.startLastRegionCapture()
         case .paste:
-            switch captureCoordinator.pinNextCapturedScreenshot() {
-            case .useClipboard:
-                pinManager.pinClipboard()
-            case .pinned, .historyExhausted:
-                break
+            var result = captureCoordinator.pinNextCapturedScreenshot()
+            if case .useClipboard = result {
+                guard !pinManager.pinClipboard() else { return }
+                // An unreadable image file must not block the next screenshot in history.
+                result = captureCoordinator.pinNextCapturedScreenshot()
+            }
+            switch result {
+            case .useClipboard: TransientFeedback.show(message: "剪贴板中没有可贴出的图片。")
+            case .historyExhausted:
+                TransientFeedback.show(message: "最近的截图已全部贴出。")
+            case .pinned: break
             }
         case .showAllPins: pinManager.showAll()
         case .hideAllPins: pinManager.hideAll()
@@ -216,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             updateUpdateMenuState()
         case .toggleAutomaticUpdateDownloads:
             let updater = updaterController.updater
-            guard updater.allowsAutomaticUpdates else { return }
+            guard updateMenuState.canToggleAutomaticDownloads else { return }
             updater.automaticallyDownloadsUpdates.toggle()
             updateUpdateMenuState()
         case .toggleLaunchAtLogin:
@@ -247,7 +287,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         let captureItem = menuItem("截图", action: #selector(capture))
         let scrollingItem = menuItem("滚动截屏…", action: #selector(captureScrolling))
         let recordingItem = menuItem("录制动图…", action: #selector(recordAnimatedGIF))
-        let pasteItem = menuItem("剪贴板贴图", action: #selector(paste))
+        let pasteItem = menuItem("贴图", action: #selector(paste))
+        pasteItem.toolTip = "优先贴出新复制的图片，否则按顺序贴出最近的截图"
         captureMenuItem = captureItem
         recordingMenuItem = recordingItem
         pasteMenuItem = pasteItem
@@ -257,55 +298,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
         menu.addItem(menuItem("暂存晾衣架", action: #selector(toggleShelf)))
+        menu.addItem(.separator())
+        menu.addItem(submenuItem("截图与贴图管理", menu: makeImageManagementMenu()))
+        menu.addItem(submenuItem("图片样式", menu: makeImageStyleMenu()))
+        menu.addItem(submenuItem("设置", menu: makeSettingsMenu()))
+        let updatesItem = submenuItem("更新", menu: makeUpdatesMenu())
+        updatesMenuItem = updatesItem
+        menu.addItem(updatesItem)
+        menu.addItem(.separator())
+        if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String {
+            menu.addItem(.sectionHeader(title: "当前版本 \(version)"))
+        }
+        menu.addItem(menuItem("退出 PinSnip", action: #selector(quit), shortcut: "q", modifiers: [.command]))
+        menu.delegate = self
+        item.menu = menu
+        statusItem = item
+        updateHotKeyMenuTitles()
+        updateShelfEdgeMenuState()
+        updateShareStyleMenuState()
+        updateUpdateMenuState()
+        updateLaunchAtLoginMenuState()
+    }
+
+    private func makeImageManagementMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(.sectionHeader(title: "晾衣架"))
         menu.addItem(menuItem("打开本地截图文件夹", action: #selector(openShelfStorage)))
         menu.addItem(menuItem("恢复已取下的截图", action: #selector(restoreArchivedShelfItems)))
-        let shelfEdgeMenu = NSMenu()
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "贴图"))
+        menu.addItem(menuItem("显示全部贴图", action: #selector(showPins)))
+        menu.addItem(menuItem("隐藏全部贴图", action: #selector(hidePins)))
+        menu.addItem(menuItem("关闭贴图鼠标穿透", action: #selector(restoreInteraction)))
+        return menu
+    }
+
+    private func makeSettingsMenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
+        menu.addItem(menuItem("GIF 分享大小…", action: #selector(showGIFShareSettings)))
+        let launchAtLoginItem = menuItem("开机启动", action: #selector(toggleLaunchAtLogin))
+        launchAtLoginMenuItem = launchAtLoginItem
+        menu.addItem(launchAtLoginItem)
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "晾衣架位置"))
         shelfEdgeMenuItems = ShelfEdge.allCases.map { edge in
             let item = menuItem(edge.title, action: #selector(selectShelfEdge(_:)))
             item.representedObject = edge.rawValue
-            shelfEdgeMenu.addItem(item)
+            menu.addItem(item)
             return item
         }
-        let shelfEdgeItem = NSMenuItem(title: "晾衣架位置", action: nil, keyEquivalent: "")
-        shelfEdgeItem.submenu = shelfEdgeMenu
-        menu.addItem(shelfEdgeItem)
-        updateShelfEdgeMenuState()
-        let shareStyleMenu = NSMenu()
+        return menu
+    }
+
+    private func makeImageStyleMenu() -> NSMenu {
+        let menu = NSMenu()
         shareStyleMenuItems = ShareStyle.allCases.map { style in
             let item = menuItem(style.title, action: #selector(selectShareStyle(_:)))
             item.representedObject = style.rawValue
-            shareStyleMenu.addItem(item)
+            menu.addItem(item)
             return item
         }
-        shareStyleMenu.addItem(.separator())
-        let sizeMenu = NSMenu()
+        menu.addItem(.separator())
+        menu.addItem(.sectionHeader(title: "边框大小"))
         borderSizeMenuItems = [0, 24, 48, 80, 120].map { pixels in
             let item = menuItem(
                 pixels == 0 ? "自动" : "\(pixels) 像素",
                 action: #selector(selectBorderSize(_:))
             )
             item.tag = pixels
-            sizeMenu.addItem(item)
+            menu.addItem(item)
             return item
         }
         let customSizeItem = menuItem("自定义…", action: #selector(customizeBorderSize))
         customBorderSizeMenuItem = customSizeItem
-        sizeMenu.addItem(customSizeItem)
-        let sizeItem = NSMenuItem(title: "边框大小", action: nil, keyEquivalent: "")
-        sizeItem.submenu = sizeMenu
-        shareStyleMenu.addItem(sizeItem)
-        let shareStyleItem = NSMenuItem(title: "图片样式", action: nil, keyEquivalent: "")
-        shareStyleItem.submenu = shareStyleMenu
-        menu.addItem(shareStyleItem)
-        menu.addItem(menuItem("GIF 分享大小…", action: #selector(showGIFShareSettings)))
-        menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
-        let launchAtLoginItem = menuItem(
-            "开机启动",
-            action: #selector(toggleLaunchAtLogin)
-        )
-        launchAtLoginMenuItem = launchAtLoginItem
-        menu.addItem(launchAtLoginItem)
-        menu.addItem(.separator())
+        menu.addItem(customSizeItem)
+        return menu
+    }
+
+    private func makeUpdatesMenu() -> NSMenu {
+        let menu = NSMenu()
         let checkForUpdatesItem = menuItem("检查更新…", action: #selector(checkForUpdates))
         checkForUpdatesMenuItem = checkForUpdatesItem
         menu.addItem(checkForUpdatesItem)
@@ -321,19 +393,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         automaticUpdateDownloadsMenuItem = automaticDownloadsItem
         menu.addItem(automaticChecksItem)
         menu.addItem(automaticDownloadsItem)
-        menu.addItem(.separator())
-        menu.addItem(menuItem("显示全部贴图", action: #selector(showPins)))
-        menu.addItem(menuItem("隐藏全部贴图", action: #selector(hidePins)))
-        menu.addItem(menuItem("关闭贴图鼠标穿透", action: #selector(restoreInteraction)))
-        menu.addItem(.separator())
-        menu.addItem(menuItem("退出 PinSnip", action: #selector(quit), shortcut: "q", modifiers: [.command]))
-        menu.delegate = self
-        item.menu = menu
-        statusItem = item
-        updateHotKeyMenuTitles()
-        updateShareStyleMenuState()
-        updateUpdateMenuState()
-        updateLaunchAtLoginMenuState()
+        return menu
+    }
+
+    private func submenuItem(_ title: String, menu: NSMenu) -> NSMenuItem {
+        let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        item.submenu = menu
+        return item
     }
 
     private func menuItem(
@@ -350,7 +416,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
 
     private func applyHotKeySettings(_ settings: HotKeySettings) -> Bool {
         guard settings.isValid else { return false }
-        guard settings != hotKeySettings else { return true }
         guard hotKeyCenter?.register(settings) == true else { return false }
 
         hotKeySettingsStore.save(settings)
@@ -362,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private func updateHotKeyMenuTitles() {
         captureMenuItem?.title = "截图（\(hotKeySettings.capture.displayName)）"
         recordingMenuItem?.title = "录制动图…（\(hotKeySettings.recording.displayName)）"
-        pasteMenuItem?.title = "剪贴板贴图（\(hotKeySettings.paste.displayName)）"
+        pasteMenuItem?.title = "贴图（\(hotKeySettings.paste.displayName)）"
     }
 
     private func updateShareStyleMenuState() {
@@ -380,13 +445,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             ? "自定义（\(borderSize.pixels ?? 48) 像素）…" : "自定义…"
     }
 
-    private func updateUpdateMenuState() {
+    private var updateMenuState: UpdateMenuState {
         let updater = updaterController.updater
-        let state = UpdateMenuState(
+        return UpdateMenuState(
             automaticallyChecksForUpdates: updater.automaticallyChecksForUpdates,
             automaticallyDownloadsUpdates: updater.automaticallyDownloadsUpdates,
             allowsAutomaticUpdates: updater.allowsAutomaticUpdates
         )
+    }
+
+    private func updateUpdateMenuState() {
+        let state = updateMenuState
         automaticUpdateChecksMenuItem?.state = state.automaticallyChecksForUpdates ? .on : .off
         automaticUpdateDownloadsMenuItem?.state = state.automaticallyDownloadsUpdates ? .on : .off
         automaticUpdateDownloadsMenuItem?.isEnabled = state.canToggleAutomaticDownloads
@@ -403,13 +472,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
             button.image?.isTemplate = true
         }
         checkForUpdatesMenuItem?.title = state.updateActionTitle
+        updatesMenuItem?.title = state.availableVersion.map { "更新到 \($0)" } ?? "更新"
     }
 
     private func showHotKeyWarning(for settings: HotKeySettings) {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "PinSnip 快捷键注册失败"
-        alert.informativeText = "\(settings.capture.displayName)、\(settings.recording.displayName) 或 \(settings.paste.displayName) 已被 macOS 或其他应用占用，仍可从菜单栏使用全部功能。"
+        let failures = hotKeyCenter?.lastRegistrationFailures ?? []
+        let actions: [(GlobalHotKeyCenter.Identifier, String, HotKeyShortcut)] = [
+            (.capture, "截图", settings.capture),
+            (.recording, "录制动图", settings.recording),
+            (.paste, "贴图", settings.paste),
+        ]
+        let failed = actions.filter { failures.contains($0.0) }
+            .map { "\($0.1)（\($0.2.displayName)）" }.joined(separator: "、")
+        alert.informativeText = failed.isEmpty
+            ? "仍可从菜单栏使用功能。可打开快捷键设置重新保存。"
+            : "\(failed)可能已被 macOS 或其他应用占用。仍可从菜单栏使用功能。"
         alert.addButton(withTitle: "打开快捷键设置")
         alert.addButton(withTitle: "稍后")
         if alert.runModal() == .alertFirstButtonReturn {

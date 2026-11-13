@@ -2,23 +2,30 @@ import AppKit
 import PinSnipCore
 
 @MainActor
-final class HotKeySettingsWindowController: NSWindowController {
+final class HotKeySettingsWindowController: NSWindowController, NSWindowDelegate {
     typealias ApplyHandler = (HotKeySettings) -> Bool
 
     private let captureRecorder: HotKeyRecorderControl
     private let recordingRecorder: HotKeyRecorderControl
     private let pasteRecorder: HotKeyRecorderControl
     private let applyHandler: ApplyHandler
+    private let recordingStateChanged: (Bool) -> Void
+    private let registrationFailures: () -> [GlobalHotKeyCenter.Identifier]
     private let errorLabel = NSTextField(wrappingLabelWithString: "")
+    private static var lastWindowFrame: NSRect?
 
-    init(settings: HotKeySettings, applyHandler: @escaping ApplyHandler) {
+    init(settings: HotKeySettings, recordingStateChanged: @escaping (Bool) -> Void = { _ in },
+         registrationFailures: @escaping () -> [GlobalHotKeyCenter.Identifier] = { [] },
+         applyHandler: @escaping ApplyHandler) {
         captureRecorder = HotKeyRecorderControl(shortcut: settings.capture)
         recordingRecorder = HotKeyRecorderControl(shortcut: settings.recording)
         pasteRecorder = HotKeyRecorderControl(shortcut: settings.paste)
         self.applyHandler = applyHandler
+        self.recordingStateChanged = recordingStateChanged
+        self.registrationFailures = registrationFailures
 
         let window = NSWindow(
-            contentRect: CGRect(x: 0, y: 0, width: 480, height: 300),
+            contentRect: CGRect(x: 0, y: 0, width: 500, height: 370),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -27,7 +34,10 @@ final class HotKeySettingsWindowController: NSWindowController {
         window.isReleasedWhenClosed = false
         window.isMovableByWindowBackground = true
         super.init(window: window)
+        window.delegate = self
         configureContent()
+        if let frame = Self.lastWindowFrame { window.setFrame(frame, display: false) }
+        else { window.center() }
     }
 
     @available(*, unavailable)
@@ -37,7 +47,6 @@ final class HotKeySettingsWindowController: NSWindowController {
 
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
-        window?.center()
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -56,16 +65,29 @@ final class HotKeySettingsWindowController: NSWindowController {
         captureRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
         recordingRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
         pasteRecorder.widthAnchor.constraint(equalToConstant: 220).isActive = true
+        for (recorder, name) in [(captureRecorder, "截图快捷键"),
+                                 (recordingRecorder, "录制动图快捷键"),
+                                 (pasteRecorder, "贴图快捷键")] {
+            recorder.setAccessibilityLabel(name)
+            recorder.onRecordingChanged = { [weak self] in
+                guard let self else { return }
+                self.recordingStateChanged(self.recorders.contains { $0.isRecording })
+            }
+            recorder.onShortcutChanged = { [weak self] in self?.errorLabel.stringValue = "" }
+        }
 
         let grid = NSGridView(views: [
             [label("截图"), captureRecorder],
             [label("录制动图"), recordingRecorder],
-            [label("剪贴板贴图"), pasteRecorder],
+            [label("贴图"), pasteRecorder],
         ])
         grid.rowSpacing = 10
         grid.columnSpacing = 16
         grid.column(at: 0).xPlacement = .trailing
         grid.column(at: 1).xPlacement = .fill
+        let pasteHint = NSTextField(wrappingLabelWithString: "贴图优先使用新复制的图片，否则从新到旧逐张贴出最近截图。")
+        pasteHint.font = .systemFont(ofSize: 12)
+        pasteHint.textColor = .secondaryLabelColor
 
         errorLabel.textColor = .systemRed
         errorLabel.font = .systemFont(ofSize: 12)
@@ -84,7 +106,7 @@ final class HotKeySettingsWindowController: NSWindowController {
         buttonRow.alignment = .centerY
         buttonRow.spacing = 8
 
-        let stack = NSStackView(views: [heading, instructions, grid, errorLabel, buttonRow])
+        let stack = NSStackView(views: [heading, instructions, grid, pasteHint, errorLabel, buttonRow])
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = 14
@@ -100,6 +122,7 @@ final class HotKeySettingsWindowController: NSWindowController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: contentView.bottomAnchor, constant: -20),
             instructions.widthAnchor.constraint(equalTo: stack.widthAnchor),
             grid.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            pasteHint.widthAnchor.constraint(equalTo: stack.widthAnchor),
             errorLabel.widthAnchor.constraint(equalTo: stack.widthAnchor),
             buttonRow.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
@@ -112,6 +135,7 @@ final class HotKeySettingsWindowController: NSWindowController {
     }
 
     @objc private func restoreDefaults() {
+        stopRecording()
         captureRecorder.shortcut = HotKeySettings.standard.capture
         recordingRecorder.shortcut = HotKeySettings.standard.recording
         pasteRecorder.shortcut = HotKeySettings.standard.paste
@@ -119,25 +143,65 @@ final class HotKeySettingsWindowController: NSWindowController {
     }
 
     @objc private func cancel() {
+        stopRecording()
         close()
     }
 
     @objc private func save() {
+        stopRecording()
         let settings = HotKeySettings(
             capture: captureRecorder.shortcut,
             recording: recordingRecorder.shortcut,
             paste: pasteRecorder.shortcut
         )
         guard settings.isValid else {
-            errorLabel.stringValue = "截图、动图录制与贴图需要使用三个不同且有效的快捷键。"
-            NSSound.beep()
+            let entries = namedRecorders
+            if let invalid = entries.first(where: { !$0.recorder.shortcut.isValid }) {
+                showError("\(invalid.name)的快捷键无效。普通按键需搭配 ⌘、⌥ 或 ⌃。", focus: invalid.recorder)
+            } else {
+                for index in 1..<entries.count {
+                    if let previous = entries[..<index].first(where: { $0.recorder.shortcut == entries[index].recorder.shortcut }) {
+                        showError("\(previous.name)与\(entries[index].name)都使用 \(entries[index].recorder.shortcut.displayName)，请修改其中一个。", focus: entries[index].recorder)
+                        break
+                    }
+                }
+            }
             return
         }
         guard applyHandler(settings) else {
-            errorLabel.stringValue = "注册失败，快捷键可能已被 macOS 或其他应用占用。原设置仍然有效。"
-            NSSound.beep()
+            let failed = namedRecorders.filter { registrationFailures().contains($0.identifier) }
+            if let first = failed.first {
+                let names = failed.map { "\($0.name)（\($0.recorder.shortcut.displayName)）" }.joined(separator: "、")
+                showError("未保存：\(names)注册失败，可能已被系统或其他应用占用。请修改后重试。", focus: first.recorder)
+            } else {
+                showError("未保存，快捷键注册失败。请换一组快捷键，仍可从菜单栏使用功能。", focus: captureRecorder)
+            }
             return
         }
         close()
+    }
+
+    private var recorders: [HotKeyRecorderControl] {
+        [captureRecorder, recordingRecorder, pasteRecorder]
+    }
+
+    private var namedRecorders: [(identifier: GlobalHotKeyCenter.Identifier, name: String, recorder: HotKeyRecorderControl)] {
+        [(.capture, "截图", captureRecorder), (.recording, "录制动图", recordingRecorder), (.paste, "贴图", pasteRecorder)]
+    }
+
+    private func showError(_ message: String, focus recorder: HotKeyRecorderControl) {
+        errorLabel.stringValue = message
+        window?.makeFirstResponder(recorder)
+        NSSound.beep()
+    }
+
+    private func stopRecording() {
+        for recorder in recorders { recorder.cancelRecording() }
+    }
+
+    func windowDidResignKey(_ notification: Notification) { stopRecording() }
+    func windowWillClose(_ notification: Notification) {
+        Self.lastWindowFrame = window?.frame
+        stopRecording()
     }
 }

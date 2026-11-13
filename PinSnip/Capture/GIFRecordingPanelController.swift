@@ -33,7 +33,7 @@ final class GIFRecordingPanelController: NSWindowController {
             help: "停止并保存分享动图…"
         )
         let copyButton = Self.actionButton(
-            title: "完成",
+            title: "复制",
             symbol: "checkmark",
             help: "停止并复制分享动图"
         )

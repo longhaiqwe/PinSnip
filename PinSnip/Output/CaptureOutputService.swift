@@ -2,6 +2,17 @@ import AppKit
 import PinSnipCore
 import UniformTypeIdentifiers
 
+enum CaptureOutputResult {
+    case succeeded
+    case cancelled
+    case failed(Error)
+
+    var succeeded: Bool {
+        if case .succeeded = self { return true }
+        return false
+    }
+}
+
 @MainActor
 enum CaptureOutputService {
     @discardableResult
@@ -53,9 +64,25 @@ enum CaptureOutputService {
     static func copyGIF(
         _ data: Data,
         to pasteboard: NSPasteboard = .general,
+        reportError: Bool = true,
         completion: @escaping (Bool) -> Void = { _ in }
     ) {
-        guard !isCopyingGIF else { completion(false); return }
+        copyGIFResult(data, to: pasteboard, reportError: reportError) {
+            completion($0.succeeded)
+        }
+    }
+
+    static func copyGIFResult(
+        _ data: Data,
+        to pasteboard: NSPasteboard = .general,
+        reportError: Bool = false,
+        completion: @escaping (CaptureOutputResult) -> Void
+    ) {
+        guard !isCopyingGIF else {
+            completion(.failed(NSError(domain: "PinSnip.Output", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "另一张动图仍在处理，请稍后重试。"])))
+            return
+        }
         isCopyingGIF = true
         let settings = GIFShareSettingsStore().load()
         let progress = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 90),
@@ -72,7 +99,7 @@ enum CaptureOutputService {
         progress.center()
         progress.orderFrontRegardless()
         Task {
-            defer { isCopyingGIF = false; progress.close() }
+            let result: CaptureOutputResult
             do {
                 let prepared = try await Task.detached(priority: .userInitiated) {
                     try GIFShareEncoder.encode(data, settings: settings)
@@ -80,14 +107,18 @@ enum CaptureOutputService {
                 guard ClipboardWriter.writePreparedGIF(prepared, to: pasteboard, includesGIFData: true) != nil else {
                     throw CocoaError(.fileWriteUnknown)
                 }
-                completion(true)
+                result = .succeeded
             } catch {
-                progress.close()
+                result = .failed(error)
+            }
+            isCopyingGIF = false
+            progress.close()
+            if reportError, case let .failed(error) = result {
                 let alert = NSAlert(error: error)
                 alert.messageText = "无法复制动图"
                 alert.runModal()
-                completion(false)
             }
+            completion(result)
         }
     }
 
@@ -120,51 +151,71 @@ enum CaptureOutputService {
         )
     }
 
-    private static func saveRendered(
+    @discardableResult
+    static func saveRendered(
         _ image: CGImage,
         panelTitle: String,
         filenamePrefix: String
     ) -> Bool {
+        saveRenderedResult(image, panelTitle: panelTitle, filenamePrefix: filenamePrefix).succeeded
+    }
+
+    static func saveRenderedResult(
+        _ image: CGImage,
+        panelTitle: String,
+        filenamePrefix: String,
+        reportError: Bool = true
+    ) -> CaptureOutputResult {
         let panel = NSSavePanel()
         panel.title = panelTitle
         panel.nameFieldStringValue = defaultFilename(prefix: filenamePrefix)
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        guard panel.runModal() == .OK, let url = panel.url else { return .cancelled }
 
         let representation = NSBitmapImageRep(cgImage: image)
-        guard let data = representation.representation(using: .png, properties: [:]) else {
-            NSSound.beep()
-            return false
+        let result: CaptureOutputResult
+        if let data = representation.representation(using: .png, properties: [:]) {
+            result = write(data, to: url)
+        } else {
+            result = .failed(CocoaError(.fileWriteUnknown))
         }
-        do {
-            try data.write(to: url, options: .atomic)
-            return true
-        } catch {
+        if reportError, case let .failed(error) = result {
             let alert = NSAlert(error: error)
             alert.messageText = "无法保存截图"
             alert.runModal()
-            return false
         }
+        return result
     }
 
     @discardableResult
     static func saveGIF(_ data: Data) -> Bool {
+        saveGIFResult(data, reportError: true).succeeded
+    }
+
+    static func saveGIFResult(_ data: Data, reportError: Bool = false) -> CaptureOutputResult {
         let panel = NSSavePanel()
         panel.title = "保存分享动图"
         panel.nameFieldStringValue = defaultFilename(fileExtension: "gif")
         panel.allowedContentTypes = [.gif]
         panel.canCreateDirectories = true
-        guard panel.runModal() == .OK, let url = panel.url else { return false }
+        guard panel.runModal() == .OK, let url = panel.url else { return .cancelled }
 
-        do {
-            try data.write(to: url, options: .atomic)
-            return true
-        } catch {
+        let result = write(data, to: url)
+        if reportError, case let .failed(error) = result {
             let alert = NSAlert(error: error)
             alert.messageText = "无法保存动图"
             alert.runModal()
-            return false
+        }
+        return result
+    }
+
+    static func write(_ data: Data, to url: URL) -> CaptureOutputResult {
+        do {
+            try data.write(to: url, options: .atomic)
+            return .succeeded
+        } catch {
+            return .failed(error)
         }
     }
 

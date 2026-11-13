@@ -17,6 +17,7 @@ final class AnimatedImageTests: XCTestCase {
         XCTAssertEqual(animation.frames[0].duration, 0.08, accuracy: 0.001)
         XCTAssertEqual(animation.frames[1].duration, 0.16, accuracy: 0.001)
         XCTAssertEqual(animation.loopCount, 3)
+        XCTAssertEqual(animation.sourceData, data, "原动图导出必须保留输入字节")
     }
 
     func testRejectsAStillImage() throws {
