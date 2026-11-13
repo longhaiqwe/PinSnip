@@ -25,18 +25,18 @@ final class ShareStyleTests: XCTestCase {
     }
 
     func testStylesUseProductMenuOrderAndTitles() {
-        XCTAssertEqual(ShareStyle.allCases, [.paperCut, .bordered, .dusk, .original])
-        XCTAssertEqual(ShareStyle.paperCut.title, "剪纸")
-        XCTAssertEqual(ShareStyle.bordered.title, "边框 · 随机适配")
+        XCTAssertEqual(ShareStyle.allCases, [.bordered, .dusk, .ocean, .lavender, .peach, .mint, .rose, .graphite, .original])
+        XCTAssertFalse(ShareStyle.allCases.contains { $0.rawValue == "paperCut" })
+        XCTAssertEqual(ShareStyle.bordered.title, "渐变 · 自动配色")
         XCTAssertEqual(ShareStyle.original.title, "原图")
     }
 
-    func testStoreDefaultsToPaperCut() throws {
+    func testStoreDefaultsToDusk() throws {
         let suiteName = "PinSnipTests.ShareStyle.Default.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        XCTAssertEqual(ShareStyleStore(defaults: defaults).load(), .paperCut)
+        XCTAssertEqual(ShareStyleStore(defaults: defaults).load(), .dusk)
     }
 
     func testStoreRemembersLastSelectionGlobally() throws {
@@ -45,13 +45,19 @@ final class ShareStyleTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = ShareStyleStore(defaults: defaults)
 
-        store.save(.bordered)
-        XCTAssertEqual(store.load(), .bordered)
-
-        store.save(.dusk)
-        XCTAssertEqual(store.load(), .dusk)
-
-        store.save(.original)
-        XCTAssertEqual(store.load(), .original)
+        for style in ShareStyle.allCases {
+            store.save(style)
+            XCTAssertEqual(ShareStyleStore(defaults: defaults).load(), style)
+        }
     }
+    func testRemovedPaperCutAndUnknownPreferencesFallBackToDusk() throws {
+        let suiteName = "PinSnipTests.ShareStyle.Migration.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        for value in ["paperCut", "unknown"] {
+            defaults.set(value, forKey: "PinSnip.ShareStyle.v1")
+            XCTAssertEqual(ShareStyleStore(defaults: defaults).load(), .dusk)
+        }
+    }
+
 }

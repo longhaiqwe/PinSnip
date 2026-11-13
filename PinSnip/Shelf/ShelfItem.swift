@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 /// 晾衣架上的单张悬挂截图模型
 @MainActor
 final class ShelfItem: Identifiable, ObservableObject {
+    static let pasteboardType = NSPasteboard.PasteboardType("com.longhai.pinsnip.shelf-item")
     let id: UUID
     let url: URL
     let thumb: NSImage
@@ -47,6 +48,19 @@ final class ShelfItem: Identifiable, ObservableObject {
     func loadAnimation() -> AnimatedImage? {
         guard isAnimated, let data = try? Data(contentsOf: url) else { return nil }
         return AnimatedImage(data: data)
+    }
+
+    func draggingPasteboardItem() -> NSPasteboardItem? {
+        let writer: NSPasteboardItem
+        if isAnimated {
+            guard let data = try? Data(contentsOf: url, options: .mappedIfSafe) else { return nil }
+            writer = ClipboardWriter.gifPasteboardItem(data, fileURL: url)
+        } else {
+            writer = NSPasteboardItem()
+            writer.setString(url.absoluteString, forType: .fileURL)
+        }
+        writer.setString(id.uuidString, forType: Self.pasteboardType)
+        return writer
     }
 
     @discardableResult

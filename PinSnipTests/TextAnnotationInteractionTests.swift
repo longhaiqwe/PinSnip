@@ -9,6 +9,69 @@ final class TextAnnotationInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testSelectionDefersEditingControlsButQuickSelectionStillCreatesThem() throws {
+        let (window, unusedEditor, _) = makeEditor()
+        unusedEditor.removeFromSuperview()
+        defer { window.close() }
+        let context = try XCTUnwrap(CGContext(data: nil, width: 600, height: 400, bitsPerComponent: 8,
+            bytesPerRow: 2400, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let overlay = SelectionOverlayView(frame: CGRect(x: 0, y: 0, width: 600, height: 400),
+            screenshot: try XCTUnwrap(context.makeImage()), windowCandidates: [], initialPointer: .zero,
+            initialSelectionRect: .zero, purpose: .stillImage, onResult: { _ in }, onCancel: {})
+        window.contentView = overlay
+        overlay.layoutSubtreeIfNeeded()
+        XCTAssertFalse(descendants(of: overlay).contains { ($0 as? NSButton)?.toolTip == "文字大小" },
+                       "Hidden editing options must not delay the selection's first frame")
+        overlay.mouseDown(with: event(.leftMouseDown, at: CGPoint(x: 40, y: 90), in: window))
+        overlay.mouseDragged(with: event(.leftMouseDragged, at: CGPoint(x: 400, y: 300), in: window))
+        overlay.mouseUp(with: event(.leftMouseUp, at: CGPoint(x: 400, y: 300), in: window))
+        overlay.layoutSubtreeIfNeeded()
+        let buttons = descendants(of: overlay).compactMap { $0 as? NSButton }
+        let text = try XCTUnwrap(buttons.first { $0.toolTip == "文字" })
+        XCTAssertFalse(text.isHiddenOrHasHiddenAncestor)
+        XCTAssertEqual(buttons.filter { $0.toolTip == "文字" }.count, 1)
+        text.performClick(nil)
+        XCTAssertTrue(descendants(of: overlay).contains {
+            $0 is NSPopUpButton && !$0.isHiddenOrHasHiddenAncestor
+        })
+    }
+
+    @MainActor
+    func testFirstDrawPreparesHiddenControlsOnceForAllCapturePurposes() async throws {
+        for purpose in [CaptureOverlayPurpose.stillImage, .animatedGIF, .scrollingCapture] {
+            let (window, unusedEditor, _) = makeEditor()
+            unusedEditor.removeFromSuperview()
+            defer { window.close() }
+            let context = try XCTUnwrap(CGContext(data: nil, width: 600, height: 400, bitsPerComponent: 8,
+                bytesPerRow: 2400, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+            let overlay = SelectionOverlayView(frame: CGRect(x: 0, y: 0, width: 600, height: 400),
+                screenshot: try XCTUnwrap(context.makeImage()), windowCandidates: [], initialPointer: .zero,
+                initialSelectionRect: .zero, purpose: purpose, onResult: { _ in }, onCancel: {})
+            window.contentView = overlay
+            window.orderFrontRegardless()
+            window.displayIfNeeded()
+            let clock = ContinuousClock()
+            let deadline = clock.now + .seconds(2)
+            while !descendants(of: overlay).contains(where: { ($0 as? NSButton)?.toolTip == "文字大小" }),
+                  clock.now < deadline {
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let buttons = descendants(of: overlay).compactMap { $0 as? NSButton }
+            let cancel = try XCTUnwrap(buttons.first { $0.toolTip == "取消" })
+            XCTAssertTrue(cancel.isHiddenOrHasHiddenAncestor)
+            let count = buttons.count
+            overlay.mouseDown(with: event(.leftMouseDown, at: CGPoint(x: 40, y: 90), in: window))
+            overlay.mouseDragged(with: event(.leftMouseDragged, at: CGPoint(x: 400, y: 300), in: window))
+            overlay.mouseUp(with: event(.leftMouseUp, at: CGPoint(x: 400, y: 300), in: window))
+            overlay.layoutSubtreeIfNeeded()
+            XCTAssertFalse(cancel.isHiddenOrHasHiddenAncestor)
+            XCTAssertEqual(descendants(of: overlay).compactMap { $0 as? NSButton }.count, count)
+        }
+    }
+
+    @MainActor
     func testArrowStylePickerAppearsOnlyForArrowTool() throws {
         let (window, unusedEditor, _) = makeEditor()
         unusedEditor.removeFromSuperview()

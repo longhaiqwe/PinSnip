@@ -1,4 +1,5 @@
 import AppKit
+import PinSnipCore
 
 /// Freeze the visible menu before ending tracking. Main-queue tasks alone cannot
 /// reliably make progress inside NSMenu's nested event loop.
@@ -14,17 +15,27 @@ final class MenuCaptureSession {
     init(menus: [NSMenu]) { self.menus = menus }
 
     func start(
-        timeout: Duration = .seconds(5),
+        timeout: Duration = CapturePerformancePolicy.capturePreparationTimeout,
         capture: @escaping @Sendable () async throws -> CGImage,
+        onCaptureFinished: @escaping @MainActor @Sendable () -> Void = {},
         completion: @escaping @MainActor @Sendable (Result<CGImage, Error>) -> Void
     ) {
         captureTask = Task.detached { [weak self] in
             let result: Result<CGImage, Error>
-            do { result = .success(try await capture()) }
+            do {
+                try Task.checkCancellation()
+                result = .success(try await capture())
+            }
             catch { result = .failure(error) }
-            guard !Task.isCancelled else { return }
+            let wasCancelled = Task.isCancelled
             RunLoop.main.perform(inModes: [.common]) {
-                MainActor.assumeIsolated { self?.finish(result, completion: completion) }
+                MainActor.assumeIsolated {
+                    // Even a canceled UI must release its request slot once the
+                    // system callback arrives. A watchdog alone cannot do this.
+                    onCaptureFinished()
+                    guard !wasCancelled else { return }
+                    self?.finish(result, completion: completion)
+                }
             }
         }
         timeoutTask = Task.detached { [weak self] in

@@ -1,0 +1,10 @@
+sample,scenario,elapsed_ms,winner
+0,late-primary,693.216,1
+0,slow-primary,742.238,2
+0,healthy,84.437,1
+1,late-primary,692.178,1
+1,slow-primary,745.807,2
+1,healthy,85.011,1
+2,late-primary,691.967,1
+2,slow-primary,716.648,2
+2,healthy,85.253,1

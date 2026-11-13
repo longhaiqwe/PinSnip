@@ -3,7 +3,7 @@ import XCTest
 @testable import PinSnipCore
 
 final class ClipboardReaderTests: XCTestCase {
-    func testWritesGIFAsFileWithoutStaticImageFallback() throws {
+    func testWritesGIFRepresentationsBeforeFileWithoutStaticImageFallback() throws {
         let pasteboard = makePasteboard()
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("PinSnipTests.\(UUID().uuidString)", isDirectory: true)
@@ -23,10 +23,35 @@ final class ClipboardReaderTests: XCTestCase {
         )
 
         let item = try XCTUnwrap(pasteboard.pasteboardItems?.first)
-        XCTAssertEqual(item.types, [.fileURL])
+        let gifType = NSPasteboard.PasteboardType("com.compuserve.gif")
+        let qtGIFType = NSPasteboard.PasteboardType("com.trolltech.anymime.image--gif")
+        XCTAssertEqual(pasteboard.pasteboardItems?.count, 1)
+        XCTAssertEqual(item.types, [gifType, qtGIFType, .fileURL])
+        XCTAssertEqual(item.data(forType: gifType), gif)
+        XCTAssertEqual(item.data(forType: qtGIFType), gif)
         XCTAssertEqual(item.string(forType: .fileURL), url.absoluteString)
-        XCTAssertNil(pasteboard.data(forType: .tiff))
+        // AppKit can synthesize TIFF when explicitly requested; it must not be
+        // one of the representations we advertise to receiving applications.
+        XCTAssertFalse(item.types.contains(.tiff))
+        XCTAssertFalse(item.types.contains(.png))
         XCTAssertEqual(try Data(contentsOf: url), gif)
+    }
+
+    func testPreparedGIFOffersQtAnimationWithoutReencoding() throws {
+        let pasteboard = makePasteboard()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let gif = try makeGIF(width: 4, height: 3)
+        let url = try XCTUnwrap(ClipboardWriter.writePreparedGIF(
+            gif, to: pasteboard, temporaryDirectory: folder, includesGIFData: true
+        ))
+        let data = try XCTUnwrap(pasteboard.data(forType: NSPasteboard.PasteboardType("com.trolltech.anymime.image--gif")))
+        let animation = try XCTUnwrap(AnimatedImage(data: data))
+        XCTAssertEqual(data, gif)
+        XCTAssertEqual(try Data(contentsOf: url), data)
+        XCTAssertEqual(animation.frames.count, 2)
+        XCTAssertEqual(animation.frames.reduce(0) { $0 + $1.duration }, 0.3, accuracy: 0.001)
+        XCTAssertEqual(animation.loopCount, 3)
     }
 
     func testCopiedGIFAutomaticallyFitsLandscapeAndPortraitLimits() throws {
@@ -43,6 +68,25 @@ final class ClipboardReaderTests: XCTestCase {
             XCTAssertEqual(animation.frames[1].duration, 0.2, accuracy: 0.001)
             XCTAssertEqual(animation.loopCount, 3)
         }
+    }
+
+    func testSavedShareSizeIsAppliedToCopiedGIF() throws {
+        let suite = "PinSnipTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set(["maximumWidth": 640, "maximumHeight": 640, "maximumBytes": 1_000_000],
+                     forKey: "PinSnip.GIFShareSettings.v1")
+        let original = try makeGIF(width: 1600, height: 1200)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = try XCTUnwrap(ClipboardWriter.writeGIF(
+            original, to: makePasteboard(), temporaryDirectory: folder, defaults: defaults
+        ))
+        let animation = try XCTUnwrap(AnimatedImage(data: Data(contentsOf: url)))
+        XCTAssertEqual(animation.pixelWidth, 640)
+        XCTAssertEqual(animation.pixelHeight, 480)
+        XCTAssertEqual(animation.frames.reduce(0) { $0 + $1.duration }, 0.3, accuracy: 0.001)
+        XCTAssertEqual(animation.loopCount, 3)
     }
 
     func testInvalidGIFDoesNotReplaceClipboard() {

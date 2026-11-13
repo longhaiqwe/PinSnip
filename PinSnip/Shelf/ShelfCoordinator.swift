@@ -22,6 +22,7 @@ final class ShelfCoordinator: ObservableObject {
     var slotRects: [UUID: CGRect] = [:]
 
     var hitRects: [UUID: CGRect] = [:]
+    var controlsRect: CGRect = .zero
 
     private var panel: ShelfPanel?
     private var mouseTimer: Timer?
@@ -30,22 +31,17 @@ final class ShelfCoordinator: ObservableObject {
     private var peekUntil: Date = .distantPast
     private var menuBarSuppressed: Bool = false
     private var clickMonitors: [Any] = []
-    private var maxCapacity: Int = 10
 
     weak var pinManager: PinWindowManager?
 
     private static let revealDelay: TimeInterval = 0.25
     private static let retractDelay: TimeInterval = 0.50
 
-    private let storageFolder: URL = {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let folder = base.appendingPathComponent("PinSnip/Shelf", isDirectory: true)
-        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        return folder
-    }()
+    private let storage: ShelfStorage
 
-    init(edgeStore: ShelfEdgeStore = ShelfEdgeStore()) {
+    init(edgeStore: ShelfEdgeStore = ShelfEdgeStore(), storage: ShelfStorage = ShelfStorage()) {
         self.edgeStore = edgeStore
+        self.storage = storage
         edge = edgeStore.load()
     }
 
@@ -59,9 +55,9 @@ final class ShelfCoordinator: ObservableObject {
         slotRects = [:]
         clearDropIndicator()
         hitRects = [:]
+        controlsRect = .zero
         panel?.ignoresMouseEvents = true
         panel?.placeOnScreen(edge: edge)
-        updateCapacity()
         setRevealed(true)
         peekUntil = Date().addingTimeInterval(3)
     }
@@ -69,6 +65,7 @@ final class ShelfCoordinator: ObservableObject {
     /// 启动晾衣架系统
     func start(pinManager: PinWindowManager) {
         self.pinManager = pinManager
+        restoreStoredItems()
         let rootView = ShelfView(coordinator: self)
         let hostView = ShelfHostingView(rootView: rootView)
         hostView.sizingOptions = []
@@ -79,7 +76,6 @@ final class ShelfCoordinator: ObservableObject {
         shelfPanel.orderFrontRegardless()
         panel = shelfPanel
 
-        updateCapacity()
         startMouseTracking()
         watchMenuBarClicks()
         NotificationCenter.default.addObserver(
@@ -93,7 +89,7 @@ final class ShelfCoordinator: ObservableObject {
         slotRects = [:]
         clearDropIndicator()
         hitRects = [:]
-        updateCapacity()
+        controlsRect = .zero
     }
 
     func shutdown() {
@@ -113,7 +109,6 @@ final class ShelfCoordinator: ObservableObject {
             setRevealed(false)
         } else {
             panel?.placeOnScreen(edge: edge)
-            updateCapacity()
             setRevealed(true)
         }
     }
@@ -190,37 +185,23 @@ final class ShelfCoordinator: ObservableObject {
         let ids = ShelfReordering.moving(id, to: index, in: items.map(\.id))
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
         items = ids.compactMap { byID[$0] }
+        persistOrder()
         clearDropIndicator()
         return true
     }
 
     /// 将新截取的图像挂在晾衣架上
     func hang(image: CGImage, fromScreenRect: CGRect? = nil) {
-        let id = UUID()
-        let filename = "screenshot-\(id.uuidString).png"
-        let fileURL = storageFolder.appendingPathComponent(filename)
-
-        let rep = NSBitmapImageRep(cgImage: image)
-        guard let pngData = rep.representation(using: .png, properties: [:]) else { return }
-        try? pngData.write(to: fileURL)
-
-        let originalSize = CGSize(width: image.width, height: image.height)
-        let thumbSize = ShelfLayout.photoSize(for: originalSize)
-        let thumbImage = NSImage(cgImage: image, size: thumbSize)
-
-        let item = ShelfItem(
-            id: id,
-            url: fileURL,
-            thumb: thumbImage,
-            originalSize: originalSize
-        )
-
-        append(item)
+        do {
+            append(try storage.storeImage(image))
+        } catch {
+            showStorageError(error)
+        }
     }
 
     func hangGIF(_ data: Data) {
         do {
-            append(try ShelfItem.storeGIF(data, in: storageFolder))
+            append(try ShelfItem.storeGIF(data, in: storage.directory))
         } catch {
             NSSound.beep()
         }
@@ -229,14 +210,7 @@ final class ShelfCoordinator: ObservableObject {
     private func append(_ item: ShelfItem) {
         items.insert(item, at: 0)
 
-        // 超过容量移除最旧卡片
-        if items.count > maxCapacity {
-            let overflow = items.suffix(from: maxCapacity)
-            for oldItem in overflow {
-                try? FileManager.default.removeItem(at: oldItem.url)
-            }
-            items.removeLast(items.count - maxCapacity)
-        }
+        persistOrder()
 
         // 新截图挂上时，让面板在鼠标所在屏幕展开，并短暂停留让用户感知
         panel?.placeOnScreen(edge: edge)
@@ -246,11 +220,20 @@ final class ShelfCoordinator: ObservableObject {
 
     /// 复制卡片到剪贴板
     func copy(item: ShelfItem) {
-        guard item.copy(to: .general) else { return }
+        if item.isAnimated {
+            guard let data = try? Data(contentsOf: item.url) else { NSSound.beep(); return }
+            CaptureOutputService.copyGIF(data) { [weak self] succeeded in
+                if succeeded { self?.showCopiedFeedback(for: item.id) }
+            }
+        } else if item.copy(to: .general) {
+            showCopiedFeedback(for: item.id)
+        }
+    }
 
-        copiedID = item.id
+    private func showCopiedFeedback(for id: UUID) {
+        copiedID = id
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-            if self?.copiedID == item.id {
+            if self?.copiedID == id {
                 self?.copiedID = nil
             }
         }
@@ -273,10 +256,29 @@ final class ShelfCoordinator: ObservableObject {
         discard(item: item)
     }
 
-    /// 丢弃并从晾衣架取下
+    /// 从晾衣架取下，原文件归档以便恢复。
     func discard(item: ShelfItem) {
-        items.removeAll { $0.id == item.id }
-        try? FileManager.default.removeItem(at: item.url)
+        do {
+            try storage.archive(item)
+            items.removeAll { $0.id == item.id }
+            persistOrder()
+        } catch {
+            showStorageError(error)
+        }
+    }
+
+    /// 一次取下全部卡片，保留原文件，失败项继续留在架上。
+    func clearAll() {
+        guard !items.isEmpty, !isDragging else { return }
+        let result = storage.archiveAll(items)
+        items.removeAll { result.archivedIDs.contains($0.id) }
+        copiedID = nil
+        slotRects = slotRects.filter { !result.archivedIDs.contains($0.key) }
+        hitRects = hitRects.filter { !result.archivedIDs.contains($0.key) }
+        clearDropIndicator()
+        persistOrder()
+        peekUntil = Date().addingTimeInterval(3)
+        if let error = result.firstError { showStorageError(error) }
     }
 
     /// 打开系统标注 (Markup)
@@ -324,7 +326,7 @@ final class ShelfCoordinator: ObservableObject {
             guard let self, self.edge == .top else { return }
             let mouse = NSEvent.mouseLocation
             let inAnyMenuBar = NSScreen.screens.contains {
-                NSMouseInRect(mouse, Self.menuBarBand(of: $0), false)
+                ShelfLayout.containsPointer(mouse, in: Self.menuBarBand(of: $0))
             }
             if inAnyMenuBar {
                 self.menuBarSuppressed = true
@@ -353,9 +355,9 @@ final class ShelfCoordinator: ObservableObject {
         let mouse = NSEvent.mouseLocation
         let now = Date()
 
-        let screenUnderPointer = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+        let screenUnderPointer = ShelfPanel.screen(containing: mouse)
         let inMenuBar = screenUnderPointer.map {
-            NSMouseInRect(mouse, Self.menuBarBand(of: $0), false)
+            ShelfLayout.containsPointer(mouse, in: Self.menuBarBand(of: $0))
         } ?? false
 
         if !inMenuBar {
@@ -363,9 +365,11 @@ final class ShelfCoordinator: ObservableObject {
         }
 
         let inHotZone = screenUnderPointer.map { screen in
-            ShelfLayout.activationZone(
-                in: screen.frame, edge: edge, topInset: Self.menuBarBand(of: screen).height
-            ).contains(mouse)
+            let zone = ShelfLayout.activationZone(
+                in: screen.frame, edge: edge, topInset: Self.menuBarBand(of: screen).height,
+                visibleFrame: screen.visibleFrame
+            )
+            return ShelfLayout.containsPointer(mouse, in: zone)
         } ?? false
 
         // 未展开状态：在所选边缘停留 0.25 秒展开
@@ -376,7 +380,6 @@ final class ShelfCoordinator: ObservableObject {
                 if now.timeIntervalSince(since) >= Self.revealDelay {
                     hotZoneSince = nil
                     panel.placeOnScreen(screen, edge: edge)
-                    updateCapacity()
                     setRevealed(true)
                 }
             } else {
@@ -392,7 +395,7 @@ final class ShelfCoordinator: ObservableObject {
         if let screen = panel.screen {
             zone = ShelfLayout.retentionZone(panel: panel.frame, screen: screen.frame, edge: edge)
         }
-        let inside = NSMouseInRect(mouse, zone, false)
+        let inside = ShelfLayout.containsPointer(mouse, in: zone)
 
         let isBusy = isDragging || now < peekUntil || visibility.isHeldForCapture
         if inside || isBusy {
@@ -407,7 +410,7 @@ final class ShelfCoordinator: ObservableObject {
         }
     }
 
-    /// 关键：动态判断光标是否在卡片上，仅在卡片上时接收鼠标，其余区域事件穿透给底层应用
+    /// 卡片和操作按钮接收鼠标，其余空白区域穿透给底层应用。
     private func updateMousePassThrough(_ mouse: NSPoint) {
         guard let panel, !isDragging else { return }
         let local = panel.convertPoint(fromScreen: mouse)
@@ -415,14 +418,41 @@ final class ShelfCoordinator: ObservableObject {
         let overCard = hitRects.values.contains {
             $0.insetBy(dx: -4, dy: -4).contains(flipped)
         }
-        if panel.ignoresMouseEvents == overCard {
-            panel.ignoresMouseEvents = !overCard
+        let interactive = overCard || controlsRect.contains(flipped)
+        if panel.ignoresMouseEvents == interactive {
+            panel.ignoresMouseEvents = !interactive
         }
     }
 
-    private func updateCapacity() {
-        guard let panel else { return }
-        // 切换方向不改变队列容量，较长的队列通过滚动浏览。
-        maxCapacity = ShelfLayout.capacity(forWidth: panel.screen?.visibleFrame.width ?? panel.frame.width)
+    private func restoreStoredItems() {
+        do {
+            items = try storage.loadItems()
+            persistOrder()
+        } catch {
+            showStorageError(error)
+        }
+    }
+
+    private func persistOrder() {
+        do { try storage.saveOrder(items) }
+        catch { showStorageError(error) }
+    }
+
+    func restoreArchivedItems() {
+        do { try storage.restoreArchived() }
+        catch { showStorageError(error) }
+        restoreStoredItems()
+        setRevealed(true)
+        peekUntil = Date().addingTimeInterval(3)
+    }
+
+    func openStorageFolder() {
+        NSWorkspace.shared.open(storage.directory)
+    }
+
+    private func showStorageError(_ error: Error) {
+        let alert = NSAlert(error: error)
+        alert.messageText = "无法读写本地截图"
+        alert.runModal()
     }
 }

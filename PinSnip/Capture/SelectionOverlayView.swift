@@ -104,15 +104,17 @@ final class SelectionOverlayView: NSView {
     private var mosaicNSImage: NSImage? {
         if let cachedMosaicNSImage { return cachedMosaicNSImage }
         let scale = CGFloat(screenshot.width) / max(1, bounds.width)
-        let pixelSize = max(4, 16 * scale)
+        let pixelSize = max(4, AnnotationRenderer.defaultMosaicPixelSize * scale)
         guard let cg = AnnotationRenderer.createMosaicImage(from: screenshot, pixelSize: pixelSize) else { return nil }
         let image = NSImage(cgImage: cg, size: bounds.size)
         cachedMosaicNSImage = image
         return image
     }
-    private let toolbar = NSView()
-    private let toolsStack = NSStackView()
-    private let actionsStack = NSStackView()
+    private lazy var toolbar = NSView()
+    private lazy var toolsStack = NSStackView()
+    private lazy var actionsStack = NSStackView()
+    private var editingControlsPrepared = false
+    private var editingControlsScheduled = false
     private var undoButton: NSButton?
     private var redoButton: NSButton?
     private let selectionOptionsBar = NSView()
@@ -120,18 +122,18 @@ final class SelectionOverlayView: NSView {
     private let aspectRatioPopUp = NSPopUpButton()
     private var aspectRatioOption = AspectRatioOption.free
     private var toolButtons: [Tool: NSButton] = [:]
-    private let arrowOptionsBar = NSView()
-    private let arrowOptionsStack = NSStackView()
+    private lazy var arrowOptionsBar = NSView()
+    private lazy var arrowOptionsStack = NSStackView()
     private var arrowStyleButtons: [ArrowAnnotationStyle: NSButton] = [:]
     private var annotationArrowStyle = ArrowAnnotationStyle.line
-    private let numberOptionsBar = NSView()
-    private let numberOptionsStack = NSStackView()
-    private let numberSizePopUp = NSPopUpButton()
+    private lazy var numberOptionsBar = NSView()
+    private lazy var numberOptionsStack = NSStackView()
+    private lazy var numberSizePopUp = NSPopUpButton()
     private var annotationNumberSize = NumberAnnotationSizePreset.medium
-    private let textOptionsBar = NSView()
-    private let textOptionsStack = NSStackView()
-    private let textSizePopUp = NSPopUpButton()
-    private let textHint = NSTextField(labelWithString: "拖边框移动 · 两侧调宽 · ⌘↩ 完成")
+    private lazy var textOptionsBar = NSView()
+    private lazy var textOptionsStack = NSStackView()
+    private lazy var textSizePopUp = NSPopUpButton()
+    private lazy var textHint = NSTextField(labelWithString: "拖边框移动 · 两侧调宽 · ⌘↩ 完成")
     private var textColorSwatches: [NSButton] = []
     private var annotationColor = TextAnnotationPalette.colors.last!
     private var annotationTextSize = TextAnnotationSizePreset.medium
@@ -178,15 +180,38 @@ final class SelectionOverlayView: NSView {
         phase = initialSelectionRect.isEmpty ? .selecting : .editing
         editingSelectionRect = initialSelectionRect.isEmpty ? nil : initialSelectionRect
         wantsLayer = true
+        // Prepare primary actions before attaching the overlay to its window.
+        // Deferring these controls also defers their first layer render until mouse-up.
         configureToolbar()
+        toolbar.isHidden = phase == .selecting
+        configureSelectionOptionsBar()
+        selectionOptionsBar.isHidden = phase == .editing
+        if phase == .editing { prepareEditingControls() }
+    }
+
+    private func prepareEditingControls() {
+        guard !editingControlsPrepared else { return }
+        editingControlsPrepared = true
         configureTextOptionsBar()
         configureNumberOptionsBar()
         configureArrowOptionsBar()
-        configureSelectionOptionsBar()
         toolbar.isHidden = phase == .selecting
         textOptionsBar.isHidden = phase == .selecting || tool != .text
-        selectionOptionsBar.isHidden = phase == .editing
+        numberOptionsBar.isHidden = phase == .selecting || tool != .number
+        arrowOptionsBar.isHidden = phase == .selecting || tool != .arrow
         if phase == .editing { updateToolButtons() }
+        needsLayout = true
+    }
+
+    private func scheduleEditingControlsPreparation() {
+        guard !editingControlsPrepared, !editingControlsScheduled, window?.isVisible == true else { return }
+        editingControlsScheduled = true
+        // Let the first selection frame reach WindowServer before preparing hidden controls.
+        // A quick mouse-up prepares them synchronously; this callback never creates duplicates.
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(50)) { [weak self] in
+            guard let self, self.window?.isVisible == true else { return }
+            self.prepareEditingControls()
+        }
     }
 
     @available(*, unavailable)
@@ -339,6 +364,7 @@ final class SelectionOverlayView: NSView {
     override func layout() {
         super.layout()
         layoutSelectionOptionsBar()
+        guard editingControlsPrepared else { return }
         layoutToolbar()
         layoutTextOptionsBar()
         layoutNumberOptionsBar()
@@ -346,6 +372,7 @@ final class SelectionOverlayView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        defer { scheduleEditingControlsPreparation() }
         let image = NSImage(cgImage: screenshot, size: bounds.size)
         image.draw(in: bounds, from: .zero, operation: .copy, fraction: 1)
 
@@ -596,6 +623,7 @@ final class SelectionOverlayView: NSView {
                 return
             }
             phase = .editing
+            prepareEditingControls()
             editingSelectionRect = selectionState.rect
             toolbar.isHidden = false
             textOptionsBar.isHidden = tool != .text
@@ -750,8 +778,13 @@ final class SelectionOverlayView: NSView {
 
         // Refactoring UI §3.6: separate annotation tools from output actions.
         defer {
+            // Size detached stacks before attaching them to a visible window.
+            // A zero-size autoresizing constraint otherwise fights every button constraint.
             toolsStack.setFrameSize(toolsStack.fittingSize)
             actionsStack.setFrameSize(actionsStack.fittingSize)
+            if purpose == .stillImage { toolbar.addSubview(toolsStack) }
+            toolbar.addSubview(actionsStack)
+            addSubview(toolbar)
         }
         for group in [toolsStack, actionsStack] {
             group.orientation = .horizontal
@@ -759,9 +792,6 @@ final class SelectionOverlayView: NSView {
             group.spacing = CaptureToolbarStyle.itemSpacing
             group.setContentHuggingPriority(.required, for: .horizontal)
         }
-        if purpose == .stillImage { toolbar.addSubview(toolsStack) }
-        toolbar.addSubview(actionsStack)
-        addSubview(toolbar)
 
         if purpose == .animatedGIF {
             CaptureToolbarLayout.animatedGIFActions.forEach(addActionButton)
@@ -1346,7 +1376,10 @@ final class SelectionOverlayView: NSView {
                 diameter: numberDiameter
             )
         case .mosaic:
-            return .mosaic(SelectionRect(start: start, end: end).rect, pixelSize: 16)
+            return .mosaic(
+                SelectionRect(start: start, end: end).rect,
+                pixelSize: AnnotationRenderer.defaultMosaicPixelSize
+            )
         case .mosaicPencil:
             return .mosaicPencil(pencilPoints.isEmpty ? [start, end] : pencilPoints, width: 20)
         }

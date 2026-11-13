@@ -29,7 +29,7 @@ struct ShelfGrabArea: NSViewRepresentable {
         view.setAccessibilityLabel(item.isAnimated ? "GIF 动图缩略图" : "截图缩略图")
         view.setAccessibilityHelp(view.toolTip)
         view.itemID = item.id
-        view.url = item.url
+        view.item = item
         view.dragImage = item.thumb
         view.onClick = onCopy
         view.onDoubleClick = onPin
@@ -52,12 +52,12 @@ struct ShelfGrabArea: NSViewRepresentable {
 
 final class ShelfGrabView: NSView, NSDraggingSource {
     static var isDragging = false
-    static let shelfItemType = NSPasteboard.PasteboardType("com.longhai.pinsnip.shelf-item")
+    static let shelfItemType = ShelfItem.pasteboardType
 
     var itemID: UUID?
     var didDropOnShelf = false
 
-    var url: URL?
+    var item: ShelfItem?
     var dragImage: NSImage?
     var onClick: () -> Void = {}
     var onDoubleClick: () -> Void = {}
@@ -119,15 +119,13 @@ final class ShelfGrabView: NSView, NSDraggingSource {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let start = downPoint, !startedDrag, let url else { return }
+        guard let start = downPoint, !startedDrag, let shelfItem = item else { return }
         let p = event.locationInWindow
         guard hypot(p.x - start.x, p.y - start.y) > 4, !didLongPress else { return }
+        guard let writer = shelfItem.draggingPasteboardItem() else { return }
         startedDrag = true
         endPress()
 
-        let writer = NSPasteboardItem()
-        writer.setString(url.absoluteString, forType: .fileURL)
-        if let itemID { writer.setString(itemID.uuidString, forType: Self.shelfItemType) }
         let item = NSDraggingItem(pasteboardWriter: writer)
         item.setDraggingFrame(imageFrame(), contents: dragImage)
         didDropOnShelf = false

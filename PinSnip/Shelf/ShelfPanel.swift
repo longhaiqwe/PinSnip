@@ -28,10 +28,15 @@ final class ShelfPanel: NSPanel {
 
     /// 获取光标当前所在的屏幕
     static func screenUnderPointer() -> NSScreen? {
-        let mouse = NSEvent.mouseLocation
-        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) }
+        screen(containing: NSEvent.mouseLocation)
             ?? NSScreen.main
             ?? NSScreen.screens.first
+    }
+
+    static func screen(containing point: NSPoint) -> NSScreen? {
+        // 先沿用系统对相邻屏幕交界的归属，再补上物理屏幕的端点。
+        NSScreen.screens.first { NSMouseInRect(point, $0.frame, false) }
+            ?? NSScreen.screens.first { ShelfLayout.containsPointer(point, in: $0.frame) }
     }
 
     /// 将面板对齐到所选屏幕边缘的可见区域
@@ -47,6 +52,8 @@ final class ShelfPanel: NSPanel {
 /// 系统文件拖拽的架内落点；仅接受本次从晾衣架发起的拖动。
 final class ShelfHostingView: NSHostingView<ShelfView> {
     private var coordinator: ShelfCoordinator { rootView.coordinator }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
     private func accepts(_ sender: NSDraggingInfo) -> Bool {
         guard let source = sender.draggingSource as? ShelfGrabView,
@@ -97,7 +104,7 @@ final class ShelfHostingView: NSHostingView<ShelfView> {
         guard let scroll = findScroll(in: self), let document = scroll.documentView else { return }
         let vertical = coordinator.edge.isVertical
         let coordinate = vertical ? point.y : point.x
-        let length = vertical ? bounds.height : bounds.width
+        let length = vertical ? max(0, bounds.height - ShelfLayout.controlsHeight) : bounds.width
         let delta: CGFloat = coordinate < 36 ? -12 : (coordinate > length - 36 ? 12 : 0)
         guard delta != 0 else { return }
         let clip = scroll.contentView

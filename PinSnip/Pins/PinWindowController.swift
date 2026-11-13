@@ -12,27 +12,25 @@ final class PinWindowController: NSWindowController, NSWindowDelegate {
         window?.ignoresMouseEvents == true
     }
 
-    convenience init(image: CGImage, origin: NSPoint) {
-        self.init(image: image, animation: nil, origin: origin)
+    convenience init(image: CGImage, frame: NSRect) {
+        self.init(image: image, animation: nil, frame: frame)
     }
 
-    convenience init(animation: AnimatedImage, origin: NSPoint) {
-        self.init(image: animation.frames[0].image, animation: animation, origin: origin)
+    convenience init(animation: AnimatedImage, frame: NSRect) {
+        self.init(image: animation.frames[0].image, animation: animation, frame: frame)
     }
 
-    private init(image: CGImage, animation: AnimatedImage?, origin: NSPoint) {
+    private init(image: CGImage, animation: AnimatedImage?, frame: NSRect) {
         self.image = image
         self.imageView = if let animation {
             PinImageView(animation: animation)
         } else {
             PinImageView(image: image)
         }
-        let naturalSize = NSSize(width: image.width, height: image.height)
-        let fit = min(1, min(560 / max(1, naturalSize.width), 420 / max(1, naturalSize.height)))
-        self.baseSize = NSSize(width: max(80, naturalSize.width * fit), height: max(60, naturalSize.height * fit))
+        self.baseSize = frame.size
 
         let panel = PinPanel(
-            contentRect: NSRect(origin: origin, size: baseSize),
+            contentRect: frame,
             styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false

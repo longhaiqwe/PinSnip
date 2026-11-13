@@ -9,8 +9,6 @@ enum CapturedScreenshotPasteResult {
 
 @MainActor
 final class CaptureCoordinator {
-    private static let capturePreparationTimeout: Duration = .seconds(5)
-
     private let captureService = ScreenCaptureService()
     private let windowDetector = WindowDetector()
     private let visualRegionDetector = VisualRegionDetector()
@@ -42,7 +40,7 @@ final class CaptureCoordinator {
 
     init(
         pinManager: PinWindowManager,
-        shareStyle: ShareStyle = .paperCut,
+        shareStyle: ShareStyle = .dusk,
         borderSize: ShareBorderSize = .automatic,
         permissionGate: ScreenCapturePermissionGate = ScreenCapturePermissionGate(
             provider: SystemScreenCapturePermissionProvider()
@@ -64,6 +62,7 @@ final class CaptureCoordinator {
 
     func prewarmCaptureAnalysis() {
         guard visualPrewarmTask == nil else { return }
+        if let screen = NSScreen.main { captureService.prewarm(screen) }
         let visualRegionDetector = visualRegionDetector
         visualPrewarmTask = Task.detached(priority: .utility) {
             visualRegionDetector.prewarm()
@@ -100,11 +99,13 @@ final class CaptureCoordinator {
               let sessionID = captureSessionState.begin()
         else { return }
         guard permissionGate.ensureAuthorized() else {
+            captureSessionState.captureFinished(sessionID)
             captureSessionState.end(sessionID)
             presentScreenCapturePermissionRequired()
             return
         }
         guard let screen = screen(at: NSEvent.mouseLocation) else {
+            captureSessionState.captureFinished(sessionID)
             captureSessionState.end(sessionID)
             NSSound.beep()
             return
@@ -120,7 +121,9 @@ final class CaptureCoordinator {
         if !trackingMenus.isEmpty {
             let session = MenuCaptureSession(menus: trackingMenus)
             menuCaptureSession = session
-            session.start(capture: captureService.captureOperation(for: screen)) { [weak self] result in
+            session.start(capture: captureService.captureOperation(for: screen), onCaptureFinished: { [weak self] in
+                self?.captureSessionState.captureFinished(sessionID)
+            }) { [weak self] result in
                 guard let self, self.captureSessionState.isCurrent(sessionID) else { return }
                 self.menuCaptureSession = nil
                 switch result {
@@ -142,7 +145,9 @@ final class CaptureCoordinator {
         let initialWindowCandidates = windowDetector.candidates(on: screen)
         let captureService = captureService
         captureTask = Task { [weak self] in
+            defer { self?.captureSessionState.captureFinished(sessionID) }
             do {
+                try Task.checkCancellation()
                 var candidatesBefore = initialWindowCandidates
                 var capturedImage: CGImage?
                 var stableCandidates = [WindowCandidate]()
@@ -198,7 +203,7 @@ final class CaptureCoordinator {
         }
         captureTimeoutTask = Task { [weak self] in
             do {
-                try await Task.sleep(for: Self.capturePreparationTimeout)
+                try await Task.sleep(for: CapturePerformancePolicy.capturePreparationTimeout)
             } catch {
                 return
             }
@@ -619,22 +624,23 @@ final class CaptureCoordinator {
     }
 
     private func presentCaptureError(_ error: Error) {
+        if ScreenCaptureService.isPermissionError(error) {
+            presentScreenCapturePermissionRequired()
+            return
+        }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "PinSnip 无法读取屏幕"
-        alert.informativeText = "请在“系统设置 → 隐私与安全性 → 屏幕与系统音频录制”中允许 PinSnip，然后重试。\n\n\(error.localizedDescription)"
-        alert.addButton(withTitle: "打开系统设置")
-        alert.addButton(withTitle: "稍后")
-        if runForeground(alert) == .alertFirstButtonReturn {
-            openScreenCaptureSettings()
-        }
+        alert.informativeText = error.localizedDescription
+        alert.addButton(withTitle: "好")
+        _ = runForeground(alert)
     }
 
     private func presentCaptureTimeout() {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "PinSnip 读取屏幕超时"
-        alert.informativeText = "macOS 的屏幕捕获服务没有响应。现在可以再按一次 F1 或 F3 重试。"
+        alert.informativeText = "主截图方式和备用方式都未能及时返回画面，请稍后重试。"
         alert.addButton(withTitle: "好")
         _ = runForeground(alert)
     }

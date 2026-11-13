@@ -8,17 +8,40 @@ struct ShelfView: View {
     var body: some View {
         GeometryReader { geo in
             let vertical = coordinator.edge.isVertical
-            let available = vertical ? geo.size.height : geo.size.width
-            let length = max(available, CGFloat(coordinator.items.count) * ShelfLayout.spacing + 60)
+            let contentHeight = max(0, geo.size.height - ShelfLayout.controlsHeight)
+            let available = vertical ? contentHeight : geo.size.width
+            let layout = ShelfLayout.arrangement(
+                originalSizes: coordinator.items.map(\.originalSize),
+                availableLength: available,
+                edge: coordinator.edge
+            )
+            let length = layout.contentLength
             let hidden = ShelfLayout.hiddenOffset(edge: coordinator.edge)
-            ScrollView(vertical ? .vertical : .horizontal, showsIndicators: false) {
-                shelfContent(length: length, vertical: vertical)
-                    .frame(
-                        width: vertical ? geo.size.width : length,
-                        height: vertical ? length : geo.size.height
+            VStack(spacing: 0) {
+                ScrollView(vertical ? .vertical : .horizontal, showsIndicators: false) {
+                    shelfContent(layout: layout, vertical: vertical)
+                        .frame(
+                            width: vertical ? geo.size.width : length,
+                            height: vertical ? length : contentHeight
+                        )
+                }
+                .id(coordinator.edge)
+                .frame(height: contentHeight)
+                // 横向保留卡片下方的阴影和“已复制”提示，最终由面板边界裁切。
+                .scrollClipDisabled(!vertical)
+
+                ShelfClearButton(isEnabled: !coordinator.items.isEmpty && !coordinator.isDragging) {
+                    coordinator.clearAll()
+                }
+                .background(GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: ShelfControlsRectKey.self,
+                        value: geometry.frame(in: .named("shelfPanel"))
                     )
+                })
+                .frame(maxWidth: .infinity)
+                .frame(height: ShelfLayout.controlsHeight)
             }
-            .id(coordinator.edge)
             .offset(
                 x: coordinator.isRevealed ? 0 : hidden.width,
                 y: coordinator.isRevealed ? 0 : hidden.height
@@ -47,13 +70,17 @@ struct ShelfView: View {
         .onPreferenceChange(ShelfSlotRectsKey.self) { rects in
             coordinator.slotRects = rects
         }
+        .onPreferenceChange(ShelfControlsRectKey.self) { rect in
+            coordinator.controlsRect = rect
+        }
         .onPreferenceChange(ShelfHitRectsKey.self) { rects in
             coordinator.hitRects = rects
         }
     }
 
-    private func shelfContent(length: CGFloat, vertical: Bool) -> some View {
-        ZStack(alignment: .topLeading) {
+    private func shelfContent(layout: ShelfLayout.Arrangement, vertical: Bool) -> some View {
+        let length = layout.contentLength
+        return ZStack(alignment: .topLeading) {
             if vertical {
                 // 竖向绳索从夹子后方穿过，缩略图不随方向旋转。
                 Rectangle()
@@ -77,9 +104,7 @@ struct ShelfView: View {
             }
 
             ForEach(Array(coordinator.items.enumerated()), id: \.element.id) { index, item in
-                let along = ShelfLayout.x(index: index, count: coordinator.items.count, width: length)
-                let ropeY = ShelfLayout.ropeY(x: along, width: length)
-                let height = vertical ? ShelfLayout.spacing : ShelfLayout.panelHeight - ropeY
+                let frame = layout.frames[index]
                 ShelfCardView(
                     item: item,
                     isCopied: coordinator.copiedID == item.id,
@@ -92,17 +117,14 @@ struct ShelfView: View {
                     onDragStart: { coordinator.beginDragging(item: item) },
                     onDragEnd: { coordinator.endDragging() }
                 )
-                .frame(width: ShelfLayout.cardWidth, height: height, alignment: .top)
+                .frame(width: frame.width, height: frame.height, alignment: .top)
                 .background(GeometryReader { geometry in
                     Color.clear.preference(
                         key: ShelfSlotRectsKey.self,
                         value: [item.id: geometry.frame(in: .named("shelfPanel"))]
                     )
                 })
-                .position(
-                    x: vertical ? ShelfLayout.panelHeight / 2 : along,
-                    y: vertical ? along : ropeY - ShelfLayout.pinAbove + height / 2
-                )
+                .position(x: frame.midX, y: frame.midY)
             }
         }
         .animation(.spring(response: 0.52, dampingFraction: 0.78), value: coordinator.items.map(\.id))
@@ -166,10 +188,36 @@ private struct ShelfHint: View {
     }
 }
 
-/// 布局槽位独立于照片尺寸及摇摆动效，避免拖动插入点抖动。
+/// 布局槽位跟随照片尺寸，独立于摇摆动效，避免拖动插入点抖动。
 struct ShelfSlotRectsKey: PreferenceKey {
     static let defaultValue: [UUID: CGRect] = [:]
     static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue()) { $1 }
     }
+}
+
+/// 图标和文字整体居中，清理后可从菜单栏恢复。
+struct ShelfClearButton: View {
+    let isEnabled: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Label("一键清理", systemImage: "tray.and.arrow.down")
+                .font(.system(size: 12, weight: .medium))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .foregroundStyle(isEnabled ? .primary : .secondary)
+                .background(.regularMaterial, in: Capsule())
+                .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .help("取下全部截图与动图，原文件保留，可从菜单栏恢复")
+    }
+}
+
+private struct ShelfControlsRectKey: PreferenceKey {
+    static let defaultValue: CGRect = .zero
+    static func reduce(value: inout CGRect, nextValue: () -> CGRect) { value = nextValue() }
 }

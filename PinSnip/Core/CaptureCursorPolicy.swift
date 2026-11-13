@@ -24,6 +24,7 @@ public enum StaticScreenshotCaptureRoute: Equatable, Sendable {
 
 public enum CapturePerformancePolicy {
     public static let maximumScreenshotAttempts = 1
+    public static let capturePreparationTimeout: Duration = .seconds(5)
 
     public static func captureRoute(
         supportsConfiguredRectangleCapture: Bool

@@ -1,16 +1,26 @@
 import Foundation
 
 public enum ShareStyle: String, CaseIterable, Codable, Equatable, Sendable {
-    case paperCut
     case bordered
     case dusk
+    case ocean
+    case lavender
+    case peach
+    case mint
+    case rose
+    case graphite
     case original
 
     public var title: String {
         switch self {
-        case .paperCut: "剪纸"
-        case .bordered: "边框 · 随机适配"
-        case .dusk: "边框 · 暮色渐变（固定）"
+        case .bordered: "渐变 · 自动配色"
+        case .dusk: "渐变 · 暮色"
+        case .ocean: "渐变 · 海蓝"
+        case .lavender: "渐变 · 薰衣草"
+        case .peach: "渐变 · 蜜桃"
+        case .mint: "渐变 · 薄荷"
+        case .rose: "渐变 · 玫瑰"
+        case .graphite: "渐变 · 石墨"
         case .original: "原图"
         }
     }
@@ -63,8 +73,8 @@ public final class ShareStyleStore {
     }
 
     public func load() -> ShareStyle {
-        guard let rawValue = defaults.string(forKey: key) else { return .paperCut }
-        return ShareStyle(rawValue: rawValue) ?? .paperCut
+        guard let rawValue = defaults.string(forKey: key) else { return .dusk }
+        return ShareStyle(rawValue: rawValue) ?? .dusk
     }
 
     public func save(_ style: ShareStyle) {

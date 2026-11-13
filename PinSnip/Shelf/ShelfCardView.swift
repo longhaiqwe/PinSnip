@@ -27,10 +27,10 @@ struct ShelfCardView: View {
     @State private var isHovering: Bool = false
 
     private static let cardCornerRadius: CGFloat = 16
-    private static let cardInset: CGFloat = 4
+    private static let cardInset = ShelfLayout.cardInset
 
     var body: some View {
-        VStack(spacing: -12) {
+        VStack(spacing: -ShelfLayout.clipOverlap) {
             ShelfClothespin()
                 .zIndex(1)
             cardContent
@@ -200,7 +200,7 @@ struct ShelfClothespin: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 3.5, style: .continuous)
             .fill(metalGradient)
-            .frame(width: 9, height: 26)
+            .frame(width: ShelfLayout.clipWidth, height: ShelfLayout.clipHeight)
             .overlay(
                 RoundedRectangle(cornerRadius: 3.5, style: .continuous)
                     .stroke(

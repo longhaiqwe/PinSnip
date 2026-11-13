@@ -32,20 +32,38 @@ public final class ShelfEdgeStore {
 public enum ShelfLayout {
     public static let panelHeight: CGFloat = 210
     public static let ropeTop: CGFloat = 10
-    public static let spacing: CGFloat = 174
-    public static let cardWidth: CGFloat = 150
+    public static let cardGap: CGFloat = 24
+    public static let endPadding: CGFloat = 30
+    public static let cardInset: CGFloat = 4
+    public static let clipWidth: CGFloat = 9
+    public static let clipHeight: CGFloat = 26
+    public static let clipOverlap: CGFloat = 12
     public static let pinAbove: CGFloat = 9.5
     public static let maxPhotoWidth: CGFloat = 136
     public static let maxPhotoHeight: CGFloat = 104
+    public static let controlsHeight: CGFloat = 44
+
+    /// 鼠标可停在物理屏幕端点；CGRect.contains 会排除 maxX / maxY。
+    public static func containsPointer(_ point: CGPoint, in rect: CGRect) -> Bool {
+        !rect.isEmpty
+            && point.x >= rect.minX && point.x <= rect.maxX
+            && point.y >= rect.minY && point.y <= rect.maxY
+    }
+
+    /// 横向停靠时给两端控制键留空；窄屏保留至少一半宽度。
+    public static func horizontalMargin(forWidth width: CGFloat) -> CGFloat {
+        min(160, max(0, width) * 0.25)
+    }
 
     /// AppKit 屏幕坐标，原点在左下；避开菜单栏和 Dock。
     public static func panelFrame(in visible: CGRect, edge: ShelfEdge) -> CGRect {
         let thickness = min(panelHeight, edge.isVertical ? visible.width : visible.height)
+        let margin = horizontalMargin(forWidth: visible.width)
         switch edge {
         case .top:
-            return CGRect(x: visible.minX, y: visible.maxY - thickness, width: visible.width, height: thickness)
+            return CGRect(x: visible.minX + margin, y: visible.maxY - thickness, width: visible.width - 2 * margin, height: thickness)
         case .bottom:
-            return CGRect(x: visible.minX, y: visible.minY, width: visible.width, height: thickness)
+            return CGRect(x: visible.minX + margin, y: visible.minY, width: visible.width - 2 * margin, height: thickness)
         case .left:
             return CGRect(x: visible.minX, y: visible.minY, width: thickness, height: visible.height)
         case .right:
@@ -53,14 +71,15 @@ public enum ShelfLayout {
         }
     }
 
-    public static func activationZone(in screen: CGRect, edge: ShelfEdge, topInset: CGFloat) -> CGRect {
+    public static func activationZone(in screen: CGRect, edge: ShelfEdge, topInset: CGFloat, visibleFrame: CGRect? = nil) -> CGRect {
         let band: CGFloat = 4
+        let horizontal = panelFrame(in: visibleFrame ?? screen, edge: edge)
         switch edge {
         case .top:
             let height = max(band, topInset)
-            return CGRect(x: screen.minX, y: screen.maxY - height, width: screen.width, height: height)
+            return CGRect(x: horizontal.minX, y: screen.maxY - height, width: horizontal.width, height: height)
         case .bottom:
-            return CGRect(x: screen.minX, y: screen.minY, width: screen.width, height: band)
+            return CGRect(x: horizontal.minX, y: screen.minY, width: horizontal.width, height: band)
         case .left:
             return CGRect(x: screen.minX, y: screen.minY, width: band, height: screen.height)
         case .right:
@@ -106,17 +125,44 @@ public enum ShelfLayout {
         return ropeTop + 4 * sag(width: width) * f * (1 - f)
     }
 
-    /// 计算第 index 张卡片的中心 X 轴坐标（整组卡片水平居中）
-    public static func x(index: Int, count: Int, width: CGFloat) -> CGFloat {
-        guard count > 0, index >= 0, index < count else { return width / 2 }
-        let total = CGFloat(max(count - 1, 0)) * spacing
-        return width / 2 - total / 2 + CGFloat(index) * spacing
+    public struct Arrangement {
+        public let contentLength: CGFloat
+        public let frames: [CGRect]
+    }
+
+    /// 按实际缩略图、画框及夹子尺寸排列；槽位不包含摇摆动画，保证拖动落点稳定。
+    public static func arrangement(
+        originalSizes: [CGSize], availableLength: CGFloat, edge: ShelfEdge
+    ) -> Arrangement {
+        let sizes = originalSizes.map { original in
+            let photo = photoSize(for: original)
+            return CGSize(
+                width: max(clipWidth, photo.width + 2 * cardInset),
+                height: max(clipHeight, photo.height + 2 * cardInset + clipHeight - clipOverlap)
+            )
+        }
+        let extents = sizes.map { edge.isVertical ? $0.height : $0.width }
+        let total = extents.reduce(0, +) + CGFloat(max(0, sizes.count - 1)) * cardGap
+        let length = max(availableLength, total + 2 * endPadding)
+        var cursor = (length - total) / 2
+        let frames = sizes.enumerated().map { index, size in
+            let center = cursor + extents[index] / 2
+            defer { cursor += extents[index] + cardGap }
+            return CGRect(
+                x: edge.isVertical ? (panelHeight - size.width) / 2 : cursor,
+                y: edge.isVertical ? cursor : ropeY(x: center, width: length) - pinAbove,
+                width: size.width,
+                height: size.height
+            )
+        }
+        return Arrangement(contentLength: length, frames: frames)
     }
 
     /// 根据屏幕宽度计算推荐容纳的卡片数量
     public static func capacity(forWidth width: CGFloat) -> Int {
         let usable = max(0, width - 200)
-        return max(3, min(12, Int(usable / spacing)))
+        // 保持原有存储容量策略，不因缩略图尺寸或排列方向改变而丢弃图片。
+        return max(3, min(12, Int(usable / 174)))
     }
 
     /// 计算等比缩放后的预览图尺寸（保持原比例适配卡片）

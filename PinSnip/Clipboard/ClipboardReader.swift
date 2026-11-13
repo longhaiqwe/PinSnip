@@ -30,9 +30,21 @@ public enum ClipboardWriter {
         _ data: Data,
         to pasteboard: NSPasteboard = .general,
         temporaryDirectory: URL = FileManager.default.temporaryDirectory,
-        includesGIFData: Bool = false
+        includesGIFData: Bool = true,
+        defaults: UserDefaults = .standard
     ) -> URL? {
-        guard let data = resizedGIFForClipboard(data) else { return nil }
+        guard let data = try? GIFShareEncoder.encode(data, settings: GIFShareSettingsStore(defaults: defaults).load()) else { return nil }
+        return writePreparedGIF(data, to: pasteboard, temporaryDirectory: temporaryDirectory, includesGIFData: includesGIFData)
+    }
+
+    /// Writes already prepared bytes without recompressing them.
+    @discardableResult
+    public static func writePreparedGIF(
+        _ data: Data,
+        to pasteboard: NSPasteboard = .general,
+        temporaryDirectory: URL = FileManager.default.temporaryDirectory,
+        includesGIFData: Bool = true
+    ) -> URL? {
         // Keep each copied file stable for browsers that read it asynchronously.
         let url = temporaryDirectory.appendingPathComponent("PinSnip Clipboard-\(UUID().uuidString).gif")
 
@@ -46,69 +58,31 @@ public enum ClipboardWriter {
             return nil
         }
 
+        let item = gifPasteboardItem(data, fileURL: url, includesGIFData: includesGIFData)
         pasteboard.clearContents()
-        guard pasteboard.writeObjects([url as NSURL]) else {
+        guard pasteboard.writeObjects([item]) else {
             try? FileManager.default.removeItem(at: url)
             return nil
-        }
-        if includesGIFData {
-            pasteboard.setData(data, forType: NSPasteboard.PasteboardType(UTType.gif.identifier))
         }
         return url
     }
 
-    /// Bound the final, styled image, including Retina pixels and borders.
-    /// Original recordings remain untouched. Small GIFs avoid recompression.
-    private static func resizedGIFForClipboard(_ data: Data) -> Data? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              CGImageSourceGetType(source) as String? == UTType.gif.identifier,
-              CGImageSourceGetStatus(source) == .statusComplete,
-              CGImageSourceGetCount(source) > 0,
-              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-              let width = properties[kCGImagePropertyPixelWidth] as? Int,
-              let height = properties[kCGImagePropertyPixelHeight] as? Int,
-              width > 0, height > 0
-        else { return nil }
-
-        // X recommends width <= 1280 and height <= 1080, even below 15 MB.
-        // https://docs.x.com/x-api/media/quickstart/best-practices
-        let scale = min(1, 1280.0 / Double(width), 1080.0 / Double(height))
-        guard scale < 1 else { return data }
-        let outputWidth = max(1, Int((Double(width) * scale).rounded(.down)))
-        let outputHeight = max(1, Int((Double(height) * scale).rounded(.down)))
-        let count = CGImageSourceGetCount(source)
-        let result = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(
-            result, UTType.gif.identifier as CFString, count, nil
-        ) else { return nil }
-        if let properties = CGImageSourceCopyProperties(source, nil) as? [CFString: Any],
-           let gif = properties[kCGImagePropertyGIFDictionary] {
-            CGImageDestinationSetProperties(destination, [kCGImagePropertyGIFDictionary: gif] as CFDictionary)
+    /// One animated image with a file fallback, shared by copy and drag export.
+    /// Never advertise PNG/TIFF: receivers may select them and lose the animation.
+    public static func gifPasteboardItem(
+        _ data: Data,
+        fileURL: URL,
+        includesGIFData: Bool = true
+    ) -> NSPasteboardItem {
+        let item = NSPasteboardItem()
+        if includesGIFData {
+            item.setData(data, forType: NSPasteboard.PasteboardType(UTType.gif.identifier))
+            // Qt 5's QMacPasteboardMimeAny maps this UTI to image/gif without
+            // decoding a frame. Its built-in image converter only handles TIFF.
+            // https://github.com/qt/qtbase/blob/5.15/src/platformsupport/clipboard/qmacmime.mm
+            item.setData(data, forType: NSPasteboard.PasteboardType("com.trolltech.anymime.image--gif"))
         }
-        for index in 0..<count {
-            let added = autoreleasepool { () -> Bool in
-                guard let image = CGImageSourceCreateImageAtIndex(source, index, nil),
-                      let context = CGContext(
-                        data: nil, width: outputWidth, height: outputHeight,
-                        bitsPerComponent: 8, bytesPerRow: 0,
-                        space: CGColorSpace(name: CGColorSpace.sRGB)!,
-                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-                      )
-                else { return false }
-                context.interpolationQuality = .high
-                context.draw(image, in: CGRect(x: 0, y: 0, width: outputWidth, height: outputHeight))
-                guard let resized = context.makeImage() else { return false }
-                let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
-                var frameProperties: [CFString: Any] = [:]
-                if let gif = properties?[kCGImagePropertyGIFDictionary] {
-                    frameProperties[kCGImagePropertyGIFDictionary] = gif
-                }
-                CGImageDestinationAddImage(destination, resized, frameProperties as CFDictionary)
-                return true
-            }
-            guard added else { return nil }
-        }
-        guard CGImageDestinationFinalize(destination) else { return nil }
-        return result as Data
+        item.setString(fileURL.absoluteString, forType: .fileURL)
+        return item
     }
 }

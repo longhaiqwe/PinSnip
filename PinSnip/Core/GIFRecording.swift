@@ -82,7 +82,7 @@ public enum AnimatedGIFEncoder {
     public static func encodeRecording(
         frames: [AnimatedImage.Frame],
         loopCount: Int = 0,
-        style: ShareStyle = .paperCut,
+        style: ShareStyle = .dusk,
         borderSize: ShareBorderSize = .automatic
     ) -> Data? {
         encodeRecording(frameCount: frames.count, loopCount: loopCount, style: style, borderSize: borderSize) { frames[$0] }
@@ -91,7 +91,7 @@ public enum AnimatedGIFEncoder {
     public static func encodeRecording(
         frameCount: Int,
         loopCount: Int = 0,
-        style: ShareStyle = .paperCut,
+        style: ShareStyle = .dusk,
         borderSize: ShareBorderSize = .automatic,
         frameProvider: (Int) -> AnimatedImage.Frame?
     ) -> Data? {
@@ -119,7 +119,7 @@ public enum AnimatedGIFEncoder {
         encodeStyled(
             frameCount: frameCount,
             loopCount: loopCount,
-            style: .paperCut,
+            style: .dusk,
             borderSize: .automatic,
             frameProvider: frameProvider
         )

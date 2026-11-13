@@ -141,6 +141,49 @@ final class ShelfGIFTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: item.url), data)
     }
 
+    @MainActor
+    func testDraggingGIFOffersOriginalAnimationAndFileOnOneItem() throws {
+        let data = try makeGIF(width: 1476, height: 676)
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let item = try ShelfItem.storeGIF(data, in: folder)
+        let writer = try XCTUnwrap(item.draggingPasteboardItem())
+        let pasteboard = NSPasteboard.withUniqueName()
+        defer { pasteboard.releaseGlobally() }
+        XCTAssertTrue(pasteboard.writeObjects([writer]))
+        XCTAssertEqual(pasteboard.pasteboardItems?.count, 1)
+        for type in ["com.compuserve.gif", "com.trolltech.anymime.image--gif"] {
+            let exported = try XCTUnwrap(pasteboard.data(forType: NSPasteboard.PasteboardType(type)))
+            XCTAssertEqual(exported, data)
+            let animation = try XCTUnwrap(AnimatedImage(data: exported))
+            XCTAssertEqual(animation.frames.count, 2)
+            XCTAssertEqual(animation.pixelWidth, 1476)
+            XCTAssertEqual(animation.frames.reduce(0) { $0 + $1.duration }, 0.3, accuracy: 0.001)
+        }
+        XCTAssertEqual(pasteboard.string(forType: .fileURL), item.url.absoluteString)
+        XCTAssertEqual(pasteboard.string(forType: ShelfItem.pasteboardType), item.id.uuidString)
+        XCTAssertFalse(writer.types.contains(.png))
+        XCTAssertFalse(writer.types.contains(.tiff))
+        XCTAssertEqual(try Data(contentsOf: item.url), data)
+    }
+
+    @MainActor
+    func testMissingGIFDoesNotBeginFileOnlyDrag() {
+        let item = ShelfItem(url: URL(fileURLWithPath: "/missing/recording.gif"), thumb: NSImage(), originalSize: .zero)
+        XCTAssertNil(item.draggingPasteboardItem())
+    }
+
+    @MainActor
+    func testStaticImageDragKeepsFileAndShelfIdentity() throws {
+        let url = URL(fileURLWithPath: "/tmp/screenshot.png")
+        let item = ShelfItem(url: url, thumb: NSImage(), originalSize: .zero)
+        let writer = try XCTUnwrap(item.draggingPasteboardItem())
+        XCTAssertEqual(writer.types, [.fileURL, ShelfItem.pasteboardType])
+        XCTAssertEqual(writer.string(forType: .fileURL), url.absoluteString)
+        XCTAssertEqual(writer.string(forType: ShelfItem.pasteboardType), item.id.uuidString)
+    }
+
     private func makeGIF(width: Int = 4, height: Int = 3) throws -> Data {
         let context = try XCTUnwrap(CGContext(
             data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,

@@ -1,10 +1,13 @@
 import AppKit
 import PinSnipCore
 import ScreenCaptureKit
+import OSLog
 
 enum ScreenCaptureError: LocalizedError {
     case displayUnavailable
     case windowUnavailable
+    case permissionDenied
+    case fallbackFailed
 
     var errorDescription: String? {
         switch self {
@@ -12,6 +15,10 @@ enum ScreenCaptureError: LocalizedError {
             return "找不到可截取的显示器。"
         case .windowUnavailable:
             return "找不到可截取的窗口。"
+        case .permissionDenied:
+            return "PinSnip 没有屏幕录制权限。"
+        case .fallbackFailed:
+            return "备用截图方式也未能获取画面，请稍后重试。"
         }
     }
 }
@@ -28,6 +35,27 @@ final class SystemScreenCapturePermissionProvider: ScreenCapturePermissionProvid
 
 @MainActor
 final class ScreenCaptureService {
+    private let recovery = CaptureRecovery<CGImage>()
+    nonisolated private static let logger = Logger(subsystem: "com.longhai.pinsnip", category: "ScreenCapture")
+
+    private var prewarmTask: Task<Void, Never>?
+
+    func prewarm(_ screen: NSScreen) {
+        guard prewarmTask == nil else { return }
+        let frame = screen.frame
+        let scale = screen.backingScaleFactor
+        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        let recovery = recovery
+        prewarmTask = Task.detached(priority: .utility) {
+            // Never prompt for permission at launch. Warm up once, only when authorized.
+            guard CGPreflightScreenCaptureAccess(), !Task.isCancelled else { return }
+            await recovery.prewarm {
+                try Task.checkCancellation()
+                return try await Self.capture(frame: frame, scale: scale, displayID: displayID)
+            }
+        }
+    }
+
     func capture(_ screen: NSScreen) async throws -> CGImage {
         try await captureOperation(for: screen)()
     }
@@ -38,8 +66,17 @@ final class ScreenCaptureService {
         let frame = screen.frame
         let scale = screen.backingScaleFactor
         let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value
+        let recovery = recovery
         return {
-            try await Self.capture(frame: frame, scale: scale, displayID: displayID)
+            try Task.checkCancellation()
+            guard CGPreflightScreenCaptureAccess() else { throw ScreenCaptureError.permissionDenied }
+            return try await recovery.capture(primary: {
+                try Task.checkCancellation()
+                return try await Self.capture(frame: frame, scale: scale, displayID: displayID)
+            }, fallback: {
+                guard let displayID else { throw ScreenCaptureError.displayUnavailable }
+                return try await Self.captureFallbackDisplay(displayID)
+            }, shouldFallback: { !Self.isPermissionError($0) && !($0 is CancellationError) })
         }
     }
 
@@ -65,6 +102,17 @@ final class ScreenCaptureService {
     }
 
     func captureWindow(id: CGWindowID, pixelScale: CGFloat) async throws -> CGImage {
+        try Task.checkCancellation()
+        guard CGPreflightScreenCaptureAccess() else { throw ScreenCaptureError.permissionDenied }
+        return try await recovery.capture(primary: {
+            try Task.checkCancellation()
+            return try await Self.captureWindowUsingScreenCaptureKit(id: id, pixelScale: pixelScale)
+        }, fallback: {
+            try await Self.captureFallbackWindow(id)
+        }, shouldFallback: { !Self.isPermissionError($0) && !($0 is CancellationError) })
+    }
+
+    nonisolated private static func captureWindowUsingScreenCaptureKit(id: CGWindowID, pixelScale: CGFloat) async throws -> CGImage {
         let content = try await SCShareableContent.excludingDesktopWindows(
             false,
             onScreenWindowsOnly: true
@@ -91,6 +139,41 @@ final class ScreenCaptureService {
             contentFilter: filter,
             configuration: configuration
         )
+    }
+
+    nonisolated static func isPermissionError(_ error: Error) -> Bool {
+        if case ScreenCaptureError.permissionDenied = error { return true }
+        let nsError = error as NSError
+        return nsError.domain == SCStreamErrorDomain && nsError.code == SCStreamError.Code.userDeclined.rawValue
+    }
+
+    nonisolated static func captureFallbackDisplay(_ displayID: CGDirectDisplayID) async throws -> CGImage {
+        logger.notice("Using Quartz display recovery for display \(displayID)")
+        return try await captureQuartz { PinSnipCopyDisplayImage(displayID) }
+    }
+
+    nonisolated private static func captureFallbackWindow(_ windowID: CGWindowID) async throws -> CGImage {
+        logger.notice("Using Quartz window recovery for window \(windowID)")
+        return try await captureQuartz { PinSnipCopyWindowImage(windowID) }
+    }
+
+    nonisolated private static func captureQuartz(_ operation: @escaping @Sendable () -> CGImage?) async throws -> CGImage {
+        try Task.checkCancellation()
+        // Quartz is synchronous. Never block the main actor or Swift's
+        // cooperative executor while waiting on WindowServer.
+        return try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                guard CGPreflightScreenCaptureAccess() else {
+                    continuation.resume(throwing: ScreenCaptureError.permissionDenied)
+                    return
+                }
+                guard let image = operation() else {
+                    continuation.resume(throwing: ScreenCaptureError.fallbackFailed)
+                    return
+                }
+                continuation.resume(returning: image)
+            }
+        }
     }
 
     @available(macOS 26.0, *)

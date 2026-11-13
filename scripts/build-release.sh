@@ -34,7 +34,10 @@ xcodegen generate
 xcodebuild test \
   -project PinSnip.xcodeproj \
   -scheme PinSnip \
+  -configuration Release \
   -destination 'platform=macOS' \
+  ENABLE_TESTABILITY=YES \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO
 
 release_settings=(

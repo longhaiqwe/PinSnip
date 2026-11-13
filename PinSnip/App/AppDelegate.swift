@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private let hotKeySettingsStore = HotKeySettingsStore()
     private var hotKeySettings = HotKeySettings.standard
     private let shareStyleStore = ShareStyleStore()
-    private var shareStyle = ShareStyle.paperCut
+    private var shareStyle = ShareStyle.dusk
     private var shelfEdgeMenuItems: [NSMenuItem] = []
     private var shareStyleMenuItems: [NSMenuItem] = []
     private let borderSizeStore = ShareBorderSizeStore()
@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     private var customBorderSizeMenuItem: NSMenuItem?
     private var hotKeyCenter: GlobalHotKeyCenter?
     private var hotKeySettingsWindowController: HotKeySettingsWindowController?
+    private var gifShareSettingsWindowController: GIFShareSettingsWindowController?
     private var statusItem: NSStatusItem?
     private var captureMenuItem: NSMenuItem?
     private var recordingMenuItem: NSMenuItem?
@@ -97,6 +98,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     @objc private func toggleShelf() {
         ShelfCoordinator.shared.toggle()
     }
+    @objc private func openShelfStorage() {
+        ShelfCoordinator.shared.openStorageFolder()
+    }
+    @objc private func restoreArchivedShelfItems() {
+        ShelfCoordinator.shared.restoreArchivedItems()
+    }
     @objc private func selectShelfEdge(_ sender: NSMenuItem) {
         guard let rawValue = sender.representedObject as? String,
               let edge = ShelfEdge(rawValue: rawValue) else { return }
@@ -133,7 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
     @objc private func customizeBorderSize() {
         let alert = NSAlert()
         alert.messageText = "设置边框大小"
-        alert.informativeText = "输入每侧边框的宽度（8–300 像素）。适用于随机适配和暮色渐变，按导出图片像素计算。"
+        alert.informativeText = "输入每侧边框的宽度（8–300 像素）。适用于自动配色和所有固定渐变背景，按导出图片像素计算。"
         let input = NSTextField(string: String(borderSize.pixels ?? 48))
         input.frame = NSRect(x: 0, y: 0, width: 260, height: 24)
         input.setAccessibilityLabel("每侧边框宽度（像素）")
@@ -158,6 +165,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         borderSizeStore.save(size)
         captureCoordinator.updateBorderSize(size)
         updateShareStyleMenuState()
+    }
+
+    @objc private func showGIFShareSettings() {
+        if let controller = gifShareSettingsWindowController, controller.window?.isVisible == true {
+            controller.showWindow(nil)
+            return
+        }
+        let controller = GIFShareSettingsWindowController()
+        gifShareSettingsWindowController = controller
+        controller.showWindow(nil)
     }
 
     @objc private func showHotKeySettings() {
@@ -240,6 +257,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         menu.addItem(menuItem("重复上次区域", action: #selector(captureLastRegion)))
         menu.addItem(pasteItem)
         menu.addItem(menuItem("暂存晾衣架", action: #selector(toggleShelf)))
+        menu.addItem(menuItem("打开本地截图文件夹", action: #selector(openShelfStorage)))
+        menu.addItem(menuItem("恢复已取下的截图", action: #selector(restoreArchivedShelfItems)))
         let shelfEdgeMenu = NSMenu()
         shelfEdgeMenuItems = ShelfEdge.allCases.map { edge in
             let item = menuItem(edge.title, action: #selector(selectShelfEdge(_:)))
@@ -278,6 +297,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation, 
         let shareStyleItem = NSMenuItem(title: "图片样式", action: nil, keyEquivalent: "")
         shareStyleItem.submenu = shareStyleMenu
         menu.addItem(shareStyleItem)
+        menu.addItem(menuItem("GIF 分享大小…", action: #selector(showGIFShareSettings)))
         menu.addItem(menuItem("快捷键设置…", action: #selector(showHotKeySettings)))
         let launchAtLoginItem = menuItem(
             "开机启动",

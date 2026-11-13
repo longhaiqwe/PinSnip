@@ -1,0 +1,134 @@
+{
+  "baseline": {
+    "first": {
+      "total_ms": {
+        "median": 268.896,
+        "min": 254.083,
+        "max": 366.16,
+        "n": 5
+      },
+      "capture_ms": {
+        "median": 95.255,
+        "min": 87.122,
+        "max": 164.595,
+        "n": 5
+      },
+      "create_ms": {
+        "median": 79.258,
+        "min": 76.132,
+        "max": 95.245,
+        "n": 5
+      },
+      "present_ms": {
+        "median": 66.486,
+        "min": 61.304,
+        "max": 80.061,
+        "n": 5
+      },
+      "edit_ms": {
+        "median": 227.376,
+        "min": 215.621,
+        "max": 287.146,
+        "n": 5
+      }
+    },
+    "repeat": {
+      "total_ms": {
+        "median": 190.615,
+        "min": 160.259,
+        "max": 218.87,
+        "n": 25
+      },
+      "capture_ms": {
+        "median": 76.33,
+        "min": 67.201,
+        "max": 101.837,
+        "n": 25
+      },
+      "create_ms": {
+        "median": 27.824,
+        "min": 24.634,
+        "max": 33.296,
+        "n": 25
+      },
+      "present_ms": {
+        "median": 59.332,
+        "min": 49.913,
+        "max": 87.893,
+        "n": 25
+      },
+      "edit_ms": {
+        "median": 11.002,
+        "min": 6.503,
+        "max": 24.359,
+        "n": 25
+      }
+    }
+  },
+  "optimized": {
+    "first": {
+      "total_ms": {
+        "median": 254.802,
+        "min": 217.002,
+        "max": 285.36,
+        "n": 5
+      },
+      "capture_ms": {
+        "median": 79.551,
+        "min": 75.297,
+        "max": 99.005,
+        "n": 5
+      },
+      "create_ms": {
+        "median": 71.22,
+        "min": 65.469,
+        "max": 74.087,
+        "n": 5
+      },
+      "present_ms": {
+        "median": 55.24,
+        "min": 47.766,
+        "max": 85.105,
+        "n": 5
+      },
+      "edit_ms": {
+        "median": 247.861,
+        "min": 231.21,
+        "max": 270.535,
+        "n": 5
+      }
+    },
+    "repeat": {
+      "total_ms": {
+        "median": 170.001,
+        "min": 144.437,
+        "max": 206.69,
+        "n": 25
+      },
+      "capture_ms": {
+        "median": 79.206,
+        "min": 66.547,
+        "max": 100.519,
+        "n": 25
+      },
+      "create_ms": {
+        "median": 16.637,
+        "min": 15.143,
+        "max": 23.794,
+        "n": 25
+      },
+      "present_ms": {
+        "median": 49.622,
+        "min": 38.753,
+        "max": 71.607,
+        "n": 25
+      },
+      "edit_ms": {
+        "median": 10.463,
+        "min": 6.345,
+        "max": 12.867,
+        "n": 25
+      }
+    }
+  }
+}

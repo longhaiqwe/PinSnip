@@ -1,0 +1,18 @@
+{
+  "PinSnip/Capture/SelectionOverlayView.swift": {
+    "before": "9f2650eab85a6a09a6baed962b3de4b2b0dc5e03134447de207cf8c2964d748f",
+    "after": "6310df645fbb3f31c612a6cb1da09a547199c6402e4561ab67d724a6226aca45"
+  },
+  "PinSnip/Capture/ScreenCaptureService.swift": {
+    "before": "5b894a87ce8f87fd484d5d4ed53108accbab69859e0463baddadea21e64718b9",
+    "after": "43c3086d63fd55917ca10643626d9e57117595d9ad763439af6345e91633e193"
+  },
+  "PinSnip/Capture/CaptureCoordinator.swift": {
+    "before": "588883f812a459069696cc7c4b8f22c6ddfd329dc81e78d06062a2e321061bfa",
+    "after": "d387b2f09e63e2cd27e34cadcdf7e0ccb430ed3b4f32f945780ecea7edee303a"
+  },
+  "PinSnip/Core/CaptureRecovery.swift": {
+    "before": "c291d01aaabedeb6552c992ade1d80e49cbeffd7e832d616077e311e44c08e5b",
+    "after": "cfc25ab0c8159669bd5e1e7866c0e2fa32d386f8a1d57b68cd9785202db17b1f"
+  }
+}

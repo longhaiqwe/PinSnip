@@ -60,15 +60,20 @@ final class UpdateConfigurationTests: XCTestCase {
                 .components(separatedBy: "</item>").first
         )
 
-        XCTAssertTrue(currentItem.contains("<sparkle:version>15</sparkle:version>"))
+        let version = try String(contentsOf: repositoryRoot.appendingPathComponent("VERSION"), encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let project = try String(contentsOf: repositoryRoot.appendingPathComponent("project.yml"), encoding: .utf8)
+        let buildLine = try XCTUnwrap(project.split(separator: "\n").first { $0.contains("CURRENT_PROJECT_VERSION:") })
+        let build = try XCTUnwrap(buildLine.split(separator: "\"").dropFirst().first)
+        XCTAssertTrue(currentItem.contains("<sparkle:version>\(build)</sparkle:version>"))
         XCTAssertTrue(
             currentItem.contains(
-                "<sparkle:shortVersionString>0.9.1</sparkle:shortVersionString>"
+                "<sparkle:shortVersionString>\(version)</sparkle:shortVersionString>"
             )
         )
         XCTAssertTrue(
             currentItem.contains(
-                "releases/download/v0.9.1/PinSnip-v0.9.1-macOS-universal.zip"
+                "releases/download/v\(version)/PinSnip-v\(version)-macOS-universal.zip"
             )
         )
         XCTAssertTrue(currentItem.contains("sparkle:edSignature="))

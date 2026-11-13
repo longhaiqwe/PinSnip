@@ -42,6 +42,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         CODE_SIGN_INJECT_BASE_ENTITLEMENTS: false
         ENABLE_HARDENED_RUNTIME: true
+        SWIFT_OBJC_BRIDGING_HEADER: PinSnip/Capture/LegacyScreenCapture.h
   PinSnipCore:
     type: framework
     platform: macOS
@@ -67,9 +68,11 @@ targets:
       - PinSnip/Capture/MenuCaptureSession.swift
       - PinSnip/Capture/ScreenGIFRecorder.swift
       - PinSnip/Capture/ScreenCaptureService.swift
+      - PinSnip/Capture/LegacyScreenCapture.m
       - PinSnip/Capture/GIFRecordingPanelController.swift
       - PinSnip/Capture/GIFRecordingBorderController.swift
       - PinSnip/Shelf/ShelfItem.swift
+      - PinSnip/Shelf/ShelfStorage.swift
       - PinSnip/Shelf/ShelfGIFPreview.swift
     dependencies:
       - target: PinSnipCore
@@ -77,6 +80,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.longhai.pinsnip.tests
         GENERATE_INFOPLIST_FILE: true
+        SWIFT_OBJC_BRIDGING_HEADER: PinSnip/Capture/LegacyScreenCapture.h
 schemes:
   PinSnip:
     build:

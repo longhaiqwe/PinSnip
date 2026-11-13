@@ -145,7 +145,7 @@ final class GIFRecordingTests: XCTestCase {
         )
     }
 
-    func testShareCardEncodingUsesStablePaperCanvasAndPreservesAnimation() throws {
+    func testShareCardEncodingUsesStableGradientCanvasAndPreservesAnimation() throws {
         let frames = [
             AnimatedImage.Frame(image: try solidImage(red: 1, blue: 0), duration: 0.08),
             AnimatedImage.Frame(image: try solidImage(red: 0, blue: 1), duration: 0.16)

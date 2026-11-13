@@ -3,6 +3,8 @@ import CoreText
 import Foundation
 
 public enum AnnotationRenderer {
+    public static let defaultMosaicPixelSize: CGFloat = 12
+
     nonisolated(unsafe) private static var fontCache: [CGFloat: CTFont] = [:]
     nonisolated(unsafe) private static var boldFontCache: [CGFloat: CTFont] = [:]
 
@@ -134,7 +136,7 @@ public enum AnnotationRenderer {
             context.restoreGState()
 
         case let .mosaicPencil(points, width):
-            guard let mosaicImage = getMosaicImage(16), let first = points.first else { return }
+            guard let mosaicImage = getMosaicImage(defaultMosaicPixelSize), let first = points.first else { return }
             context.saveGState()
             context.beginPath()
             context.move(to: first)

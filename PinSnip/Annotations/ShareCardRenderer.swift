@@ -1,28 +1,7 @@
 import CoreGraphics
-import CoreImage
 import Foundation
 
 public enum ShareCardRenderer {
-    private struct RGBColor {
-        let red: CGFloat
-        let green: CGFloat
-        let blue: CGFloat
-    }
-
-    private struct HSLColor {
-        let hue: CGFloat
-        let saturation: CGFloat
-        let lightness: CGFloat
-    }
-
-    private struct PaperPalette {
-        let field: RGBColor
-        let mainPaper: RGBColor
-        let backPaper: RGBColor
-    }
-
-    private static let screenshotRotation = CGFloat(-0.28 * .pi / 180)
-
     public struct Template {
         private let style: ShareStyle
         private let background: CGImage?
@@ -31,7 +10,7 @@ public enum ShareCardRenderer {
 
         public init?(
             styleSource: CGImage,
-            style: ShareStyle = .paperCut,
+            style: ShareStyle = .dusk,
             borderSize: ShareBorderSize = .automatic
         ) {
             self.style = style
@@ -47,8 +26,7 @@ public enum ShareCardRenderer {
                 return
             }
 
-            let padding = (style == .paperCut ? ShareBorderSize.automatic : borderSize)
-                .padding(width: styleSource.width, height: styleSource.height)
+            let padding = borderSize.padding(width: styleSource.width, height: styleSource.height)
             let canvasWidth = styleSource.width + padding * 2
             let canvasHeight = styleSource.height + padding * 2
             guard let context = ShareCardRenderer.makeContext(
@@ -59,40 +37,16 @@ public enum ShareCardRenderer {
             let canvas = CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight)
             let contentRect = canvas.insetBy(dx: CGFloat(padding), dy: CGFloat(padding))
             let cornerRadius = ShareCardRenderer.cornerRadius(for: contentRect)
-            switch style {
-            case .paperCut:
-                let palette = ShareCardRenderer.paperPalette(for: styleSource)
-                ShareCardRenderer.drawPaperStack(
-                    behind: contentRect,
-                    padding: CGFloat(padding),
-                    palette: palette,
-                    context: context
+            if style == .bordered {
+                ShareCardRenderer.drawBorderBackground(
+                    styleSource, in: canvas, context: context
                 )
-                ShareCardRenderer.drawScreenshotShadow(
-                    in: contentRect,
-                    padding: CGFloat(padding),
-                    field: palette.field,
-                    context: context
-                )
-            case .bordered, .dusk:
-                if style == .dusk {
-                    ShareCardRenderer.drawDuskBackground(in: canvas, context: context)
-                } else {
-                    ShareCardRenderer.drawBorderBackground(
-                        styleSource,
-                        in: canvas,
-                        padding: CGFloat(padding),
-                        context: context
-                    )
-                }
-                ShareCardRenderer.drawBorderCardShadow(
-                    in: contentRect,
-                    cornerRadius: cornerRadius,
-                    context: context
-                )
-            case .original:
-                break
+            } else {
+                ShareCardRenderer.drawGradientBackground(style: style, in: canvas, context: context)
             }
+            ShareCardRenderer.drawBorderCardShadow(
+                in: contentRect, cornerRadius: cornerRadius, context: context
+            )
             guard let background = context.makeImage() else { return nil }
             self.background = background
             self.contentRect = contentRect
@@ -108,30 +62,16 @@ public enum ShareCardRenderer {
             ) else { return nil }
             let canvas = CGRect(x: 0, y: 0, width: background.width, height: background.height)
             context.draw(background, in: canvas)
-            switch style {
-            case .paperCut:
-                ShareCardRenderer.drawPaperScreenshotContent(
-                    baseImage,
-                    in: contentRect,
-                    context: context
-                )
-            case .bordered, .dusk:
-                ShareCardRenderer.drawBorderScreenshotContent(
-                    baseImage,
-                    in: contentRect,
-                    cornerRadius: cornerRadius,
-                    context: context
-                )
-            case .original:
-                break
-            }
+            ShareCardRenderer.drawBorderScreenshotContent(
+                baseImage, in: contentRect, cornerRadius: cornerRadius, context: context
+            )
             return context.makeImage()
         }
     }
 
     public static func render(
         baseImage: CGImage,
-        style: ShareStyle = .paperCut,
+        style: ShareStyle = .dusk,
         borderSize: ShareBorderSize = .automatic
     ) -> CGImage? {
         Template(styleSource: baseImage, style: style, borderSize: borderSize)?.render(baseImage: baseImage)
@@ -149,137 +89,61 @@ public enum ShareCardRenderer {
         )
     }
 
-    private static func drawPaperStack(
-        behind contentRect: CGRect,
-        padding: CGFloat,
-        palette: PaperPalette,
-        context: CGContext
-    ) {
-        let mainRect = contentRect
-            .insetBy(dx: -padding * 0.28, dy: -padding * 0.29)
-            .offsetBy(dx: -padding * 0.02, dy: padding * 0.01)
-        let backRect = mainRect
-            .insetBy(dx: -padding * 0.025, dy: -padding * 0.025)
-            .offsetBy(dx: padding * 0.10, dy: -padding * 0.08)
-
-        drawPaperLayer(
-            in: backRect,
-            rotation: CGFloat(-1.15 * .pi / 180),
-            points: backPaperPoints,
-            color: palette.backPaper,
-            shadowColor: mix(palette.field, with: RGBColor(red: 0, green: 0, blue: 0), amount: 0.45),
-            shadowOffset: CGSize(width: padding * 0.04, height: -padding * 0.16),
-            shadowBlur: max(3, padding * 0.22),
-            context: context
-        )
-        drawPaperLayer(
-            in: mainRect,
-            rotation: CGFloat(0.55 * .pi / 180),
-            points: mainPaperPoints,
-            color: palette.mainPaper,
-            shadowColor: mix(palette.field, with: RGBColor(red: 0, green: 0, blue: 0), amount: 0.32),
-            shadowOffset: CGSize(width: padding * 0.08, height: -padding * 0.11),
-            shadowBlur: max(2, padding * 0.12),
-            context: context
-        )
-    }
-
-    private static func drawPaperLayer(
-        in rect: CGRect,
-        rotation: CGFloat,
-        points: [CGPoint],
-        color: RGBColor,
-        shadowColor: RGBColor,
-        shadowOffset: CGSize,
-        shadowBlur: CGFloat,
-        context: CGContext
-    ) {
-        context.saveGState()
-        rotateContext(context, by: rotation, around: CGPoint(x: rect.midX, y: rect.midY))
-        context.setShadow(
-            offset: shadowOffset,
-            blur: shadowBlur,
-            color: cgColor(shadowColor, alpha: 0.24)
-        )
-        context.addPath(irregularPath(in: rect, points: points))
-        context.setFillColor(cgColor(color))
-        context.fillPath()
-        context.restoreGState()
-    }
-
-    private static func drawScreenshotShadow(
-        in rect: CGRect,
-        padding: CGFloat,
-        field: RGBColor,
-        context: CGContext
-    ) {
-        context.saveGState()
-        rotateContext(context, by: screenshotRotation, around: CGPoint(x: rect.midX, y: rect.midY))
-        context.setShadow(
-            offset: CGSize(width: 0, height: -padding * 0.11),
-            blur: max(3, padding * 0.20),
-            color: cgColor(field, alpha: 0.34)
-        )
-        context.addPath(irregularPath(in: rect, points: screenshotPoints))
-        context.setFillColor(cgColor(field))
-        context.fillPath()
-        context.restoreGState()
-    }
-
-    private static func drawPaperScreenshotContent(
-        _ image: CGImage,
-        in rect: CGRect,
-        context: CGContext
-    ) {
-        context.saveGState()
-        rotateContext(context, by: screenshotRotation, around: CGPoint(x: rect.midX, y: rect.midY))
-        context.addPath(irregularPath(in: rect, points: screenshotPoints))
-        context.clip()
-        context.interpolationQuality = .high
-        context.draw(image, in: rect)
-        context.restoreGState()
-    }
-
     private static func drawBorderBackground(
         _ image: CGImage,
         in canvas: CGRect,
-        padding: CGFloat,
         context: CGContext
     ) {
-        // Keep blur sampling at the canvas edges from leaving translucent pixels.
-        context.setFillColor(CGColor(red: 0.12, green: 0.15, blue: 0.28, alpha: 1))
-        context.fill(canvas)
-        if let background = blurredAspectFill(image, canvasSize: canvas.size, padding: padding) {
-            context.interpolationQuality = .high
-            context.draw(background, in: canvas)
-        }
-
-        let accent = ambientColor(from: dominantColor(in: image))
+        let palette = adaptivePalette(in: image)
         let colors = [
-            cgColor(
-                mix(accent, with: RGBColor(red: 0.10, green: 0.13, blue: 0.22), amount: 0.28),
-                alpha: 0.48
-            ),
-            cgColor(
-                mix(accent, with: RGBColor(red: 0.82, green: 0.78, blue: 0.88), amount: 0.22),
-                alpha: 0.34
-            )
-        ] as CFArray
-        if let gradient = CGGradient(
+            palette.color(lightnessOffset: 0.045, chromaScale: 0.8),
+            palette.color(lightnessOffset: 0, chromaScale: 1),
+            palette.color(lightnessOffset: -0.055, chromaScale: 0.9)
+        ]
+        guard let gradient = CGGradient(
             colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
-            colors: colors,
-            locations: [0, 1]
-        ) {
-            context.drawLinearGradient(
-                gradient,
-                start: CGPoint(x: canvas.minX, y: canvas.midY),
-                end: CGPoint(x: canvas.maxX, y: canvas.midY),
-                options: []
-            )
-        }
+            colors: colors as CFArray, locations: [0, 0.5, 1]
+        ) else { return }
+        context.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: canvas.minX, y: canvas.maxY),
+            end: CGPoint(x: canvas.maxX, y: canvas.minY),
+            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+        )
+    }
 
-        context.setFillColor(CGColor(gray: 0, alpha: 0.06))
-        context.fill(canvas)
+    private static func drawGradientBackground(
+        style: ShareStyle, in canvas: CGRect, context: CGContext
+    ) {
+        if style == .dusk {
+            drawDuskBackground(in: canvas, context: context)
+            return
+        }
+        let stops: [UInt32]
+        switch style {
+        case .ocean: stops = [0xB5E9EE, 0x5CACE0, 0x4655AD]
+        case .lavender: stops = [0xEEE2F5, 0xC0AFE5, 0x8A9DD3]
+        case .peach: stops = [0xFFF0D9, 0xF5BEA4, 0xDB8D9C]
+        case .mint: stops = [0xE7F0D7, 0xA3D4C1, 0x4B9697]
+        case .rose: stops = [0xF8E1ED, 0xDDA6C1, 0xA67BAA]
+        case .graphite: stops = [0x677583, 0x3B4656, 0x1D2432]
+        case .bordered, .dusk, .original: return
+        }
+        let colors = stops.map { hex in
+            CGColor(red: CGFloat((hex >> 16) & 0xFF) / 255,
+                    green: CGFloat((hex >> 8) & 0xFF) / 255,
+                    blue: CGFloat(hex & 0xFF) / 255, alpha: 1)
+        }
+        guard let gradient = CGGradient(
+            colorsSpace: CGColorSpace(name: CGColorSpace.sRGB),
+            colors: colors as CFArray, locations: [0, 0.5, 1]
+        ) else { return }
+        context.drawLinearGradient(
+            gradient,
+            start: CGPoint(x: canvas.minX, y: canvas.maxY),
+            end: CGPoint(x: canvas.maxX, y: canvas.minY),
+            options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+        )
     }
 
     /// Deep navy, burnt orange and burgundy, independent of screenshot content.
@@ -306,30 +170,6 @@ public enum ShareCardRenderer {
         ] as CFArray, locations: [0, 0.43, 1])!
         context.drawRadialGradient(glow, startCenter: .zero, startRadius: 0,
                                    endCenter: .zero, endRadius: 1, options: [])
-    }
-
-    private static func blurredAspectFill(
-        _ image: CGImage,
-        canvasSize: CGSize,
-        padding: CGFloat
-    ) -> CGImage? {
-        let sourceSize = CGSize(width: image.width, height: image.height)
-        let scale = max(
-            canvasSize.width / max(1, sourceSize.width),
-            canvasSize.height / max(1, sourceSize.height)
-        )
-        let scaledSize = CGSize(width: sourceSize.width * scale, height: sourceSize.height * scale)
-        let transform = CGAffineTransform(
-            translationX: (canvasSize.width - scaledSize.width) / 2,
-            y: (canvasSize.height - scaledSize.height) / 2
-        ).scaledBy(x: scale, y: scale)
-        let canvas = CGRect(origin: .zero, size: canvasSize)
-        let input = CIImage(cgImage: image)
-            .transformed(by: transform)
-            .clampedToExtent()
-            .applyingGaussianBlur(sigma: max(18, padding * 0.45))
-            .cropped(to: canvas)
-        return CIContext(options: [.cacheIntermediates: false]).createCGImage(input, from: canvas)
     }
 
     private static func cornerRadius(for rect: CGRect) -> CGFloat {
@@ -386,240 +226,127 @@ public enum ShareCardRenderer {
         context.strokePath()
     }
 
-    private static func rotateContext(
-        _ context: CGContext,
-        by angle: CGFloat,
-        around center: CGPoint
-    ) {
-        context.translateBy(x: center.x, y: center.y)
-        context.rotate(by: angle)
-        context.translateBy(x: -center.x, y: -center.y)
-    }
+    // Oklab separates perceived lightness from hue and chroma.
+    // Conversion matrices: https://bottosson.github.io/posts/oklab/ (public domain).
+    private struct LabColor {
+        var lightness: Double
+        var a: Double
+        var b: Double
 
-    private static func irregularPath(in rect: CGRect, points: [CGPoint]) -> CGPath {
-        let path = CGMutablePath()
-        guard let first = points.first else { return path }
-        path.move(to: point(first, in: rect))
-        for normalizedPoint in points.dropFirst() {
-            path.addLine(to: point(normalizedPoint, in: rect))
-        }
-        path.closeSubpath()
-        return path
-    }
-
-    private static func point(_ normalizedPoint: CGPoint, in rect: CGRect) -> CGPoint {
-        CGPoint(
-            x: rect.minX + normalizedPoint.x * rect.width,
-            y: rect.minY + normalizedPoint.y * rect.height
-        )
-    }
-
-    private static let backPaperPoints = [
-        CGPoint(x: 0.008, y: 0.020),
-        CGPoint(x: 0.35, y: 0.000),
-        CGPoint(x: 0.69, y: 0.011),
-        CGPoint(x: 0.990, y: 0.002),
-        CGPoint(x: 1.000, y: 0.31),
-        CGPoint(x: 0.987, y: 0.67),
-        CGPoint(x: 0.997, y: 0.986),
-        CGPoint(x: 0.65, y: 1.000),
-        CGPoint(x: 0.31, y: 0.985),
-        CGPoint(x: 0.000, y: 0.994),
-        CGPoint(x: 0.010, y: 0.63),
-        CGPoint(x: 0.001, y: 0.29)
-    ]
-
-    private static let mainPaperPoints = [
-        CGPoint(x: 0.002, y: 0.010),
-        CGPoint(x: 0.32, y: 0.018),
-        CGPoint(x: 0.67, y: 0.000),
-        CGPoint(x: 0.992, y: 0.015),
-        CGPoint(x: 0.986, y: 0.35),
-        CGPoint(x: 0.998, y: 0.70),
-        CGPoint(x: 0.989, y: 0.994),
-        CGPoint(x: 0.66, y: 0.982),
-        CGPoint(x: 0.34, y: 0.998),
-        CGPoint(x: 0.006, y: 0.980),
-        CGPoint(x: 0.014, y: 0.62),
-        CGPoint(x: 0.002, y: 0.29)
-    ]
-
-    private static let screenshotPoints = [
-        CGPoint(x: -0.004, y: 0.010),
-        CGPoint(x: 0.33, y: -0.010),
-        CGPoint(x: 0.68, y: 0.002),
-        CGPoint(x: 1.004, y: -0.006),
-        CGPoint(x: 0.992, y: 0.35),
-        CGPoint(x: 0.998, y: 0.68),
-        CGPoint(x: 0.994, y: 0.992),
-        CGPoint(x: 0.65, y: 1.008),
-        CGPoint(x: 0.31, y: 0.990),
-        CGPoint(x: -0.003, y: 1.006),
-        CGPoint(x: 0.008, y: 0.64),
-        CGPoint(x: 0.001, y: 0.31)
-    ]
-
-    private static func paperPalette(for image: CGImage) -> PaperPalette {
-        let sampled = dominantColor(in: image)
-        let sampledHSL = hsl(from: sampled)
-        if sampledHSL.saturation < 0.055 {
-            return PaperPalette(
-                field: RGBColor(red: 0.15, green: 0.20, blue: 0.18),
-                mainPaper: RGBColor(red: 0.84, green: 0.87, blue: 0.82),
-                backPaper: RGBColor(red: 0.70, green: 0.48, blue: 0.36)
-            )
+        init(red: Double, green: Double, blue: Double) {
+            func linear(_ value: Double) -> Double {
+                value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            let r = linear(red), g = linear(green), b = linear(blue)
+            let l = cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
+            let m = cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
+            let s = cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
+            lightness = 0.2104542553 * l + 0.7936177850 * m - 0.0040720468 * s
+            a = 1.9779984951 * l - 2.4285922050 * m + 0.4505937099 * s
+            self.b = 0.0259040371 * l + 0.7827717662 * m - 0.8086757660 * s
         }
 
-        let accent = ambientColor(from: sampled)
-        let accentHSL = hsl(from: accent)
-        let fieldSaturation = min(0.46, max(0.30, accentHSL.saturation * 0.62))
-        let paperSaturation = min(0.20, max(0.10, accentHSL.saturation * 0.24))
-        let backSaturation = min(0.52, max(0.34, accentHSL.saturation * 0.76))
-        return PaperPalette(
-            field: rgb(hue: accentHSL.hue, saturation: fieldSaturation, lightness: 0.18),
-            mainPaper: rgb(hue: accentHSL.hue, saturation: paperSaturation, lightness: 0.84),
-            backPaper: rgb(
-                hue: wrappedHue(accentHSL.hue + 0.035),
-                saturation: backSaturation,
-                lightness: 0.61
-            )
-        )
+        init(lightness: Double, a: Double, b: Double) {
+            self.lightness = lightness
+            self.a = a
+            self.b = b
+        }
+
+        func color(lightnessOffset: Double, chromaScale: Double) -> CGColor {
+            let lightness = lightness + lightnessOffset
+            var scale = chromaScale
+            // Reduce chroma at the same hue until the color fits sRGB; avoid channel clipping.
+            for _ in 0..<16 {
+                let a = a * scale, b = b * scale
+                let l = pow(lightness + 0.3963377774 * a + 0.2158037573 * b, 3)
+                let m = pow(lightness - 0.1055613458 * a - 0.0638541728 * b, 3)
+                let s = pow(lightness - 0.0894841775 * a - 1.2914855480 * b, 3)
+                let r = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+                let g = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+                let blue = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+                if [r, g, blue].allSatisfy({ (0...1).contains($0) }) {
+                    func encoded(_ value: Double) -> CGFloat {
+                        CGFloat(value <= 0.0031308 ? value * 12.92 : 1.055 * pow(value, 1 / 2.4) - 0.055)
+                    }
+                    return CGColor(red: encoded(r), green: encoded(g), blue: encoded(blue), alpha: 1)
+                }
+                scale *= 0.8
+            }
+            let gray = CGFloat(1.055 * pow(pow(lightness, 3), 1 / 2.4) - 0.055)
+            return CGColor(red: gray, green: gray, blue: gray, alpha: 1)
+        }
     }
 
-    private static func dominantColor(in image: CGImage) -> RGBColor {
-        let sampleWidth = 64
-        let sampleHeight = 64
-        var pixels = [UInt8](repeating: 0, count: sampleWidth * sampleHeight * 4)
+    private static func adaptivePalette(in image: CGImage) -> LabColor {
+        let size = 64
+        var pixels = [UInt8](repeating: 0, count: size * size * 4)
         guard let context = CGContext(
-            data: &pixels,
-            width: sampleWidth,
-            height: sampleHeight,
-            bitsPerComponent: 8,
-            bytesPerRow: sampleWidth * 4,
+            data: &pixels, width: size, height: size, bitsPerComponent: 8, bytesPerRow: size * 4,
             space: CGColorSpace(name: CGColorSpace.sRGB)!,
             bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
-        ) else {
-            return RGBColor(red: 0.42, green: 0.46, blue: 0.56)
-        }
-        context.interpolationQuality = .none
-        context.draw(image, in: CGRect(x: 0, y: 0, width: sampleWidth, height: sampleHeight))
+        ) else { return LabColor(lightness: 0.85, a: 0, b: 0) }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: size, height: size))
 
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var totalWeight: CGFloat = 0
+        struct HueGroup {
+            var weight = 0.0
+            var area = 0.0
+            var a = 0.0
+            var b = 0.0
+        }
+        let count = 24
+        var groups = [HueGroup](repeating: HueGroup(), count: count)
+        var lightness = 0.0
+        var visibleArea = 0.0
         for index in stride(from: 0, to: pixels.count, by: 4) {
-            let pixelRed = CGFloat(pixels[index]) / 255
-            let pixelGreen = CGFloat(pixels[index + 1]) / 255
-            let pixelBlue = CGFloat(pixels[index + 2]) / 255
-            let maximum = max(pixelRed, pixelGreen, pixelBlue)
-            let minimum = min(pixelRed, pixelGreen, pixelBlue)
-            let saturation = maximum - minimum
-            let luminance = pixelRed * 0.2126 + pixelGreen * 0.7152 + pixelBlue * 0.0722
-            let isPaper = luminance > 0.90 && saturation < 0.08
-            let isLightNeutral = luminance > 0.68 && saturation < 0.12
-            let neutralWeight: CGFloat = isPaper ? 0.015 : isLightNeutral ? 0.025 : 1
-            let weight = neutralWeight * (0.30 + saturation * 2 + (1 - luminance) * 0.35)
-            red += pixelRed * weight
-            green += pixelGreen * weight
-            blue += pixelBlue * weight
-            totalWeight += weight
-        }
-        guard totalWeight > 0 else {
-            return RGBColor(red: 0.42, green: 0.46, blue: 0.56)
-        }
-        return RGBColor(red: red / totalWeight, green: green / totalWeight, blue: blue / totalWeight)
-    }
-
-    private static func ambientColor(from sampled: RGBColor) -> RGBColor {
-        let saturation = max(sampled.red, sampled.green, sampled.blue)
-            - min(sampled.red, sampled.green, sampled.blue)
-        let neutralAmount: CGFloat = saturation < 0.04 ? 0.55 : 0.08
-        let mixed = mix(
-            sampled,
-            with: RGBColor(red: 0.28, green: 0.33, blue: 0.43),
-            amount: neutralAmount
-        )
-        let mixedChroma = max(mixed.red, mixed.green, mixed.blue)
-            - min(mixed.red, mixed.green, mixed.blue)
-        let chromaBoost = min(2.2, max(1, 0.32 / max(0.001, mixedChroma)))
-        return amplifyChroma(mixed, by: chromaBoost)
-    }
-
-    private static func amplifyChroma(_ color: RGBColor, by factor: CGFloat) -> RGBColor {
-        let luminance = color.red * 0.2126 + color.green * 0.7152 + color.blue * 0.0722
-        return RGBColor(
-            red: min(1, max(0, luminance + (color.red - luminance) * factor)),
-            green: min(1, max(0, luminance + (color.green - luminance) * factor)),
-            blue: min(1, max(0, luminance + (color.blue - luminance) * factor))
-        )
-    }
-
-    private static func hsl(from color: RGBColor) -> HSLColor {
-        let maximum = max(color.red, color.green, color.blue)
-        let minimum = min(color.red, color.green, color.blue)
-        let delta = maximum - minimum
-        let lightness = (maximum + minimum) / 2
-        guard delta > 0.0001 else {
-            return HSLColor(hue: 0, saturation: 0, lightness: lightness)
+            let alpha = Double(pixels[index + 3]) / 255
+            guard alpha >= 0.1 else { continue }
+            let color = LabColor(
+                red: min(1, Double(pixels[index]) / 255 / alpha),
+                green: min(1, Double(pixels[index + 1]) / 255 / alpha),
+                blue: min(1, Double(pixels[index + 2]) / 255 / alpha)
+            )
+            lightness += color.lightness * alpha
+            visibleArea += alpha
+            let chroma = hypot(color.a, color.b)
+            // Neutral text and backgrounds determine brightness, but not accent hue.
+            guard chroma >= 0.025, (0.12...0.96).contains(color.lightness) else { continue }
+            let hue = atan2(color.b, color.a)
+            let bin = Int((hue + .pi) / (2 * .pi) * Double(count)) % count
+            let weight = alpha * (0.35 + min(chroma, 0.2) * 2)
+            groups[bin].weight += weight
+            groups[bin].area += alpha
+            groups[bin].a += color.a * weight
+            groups[bin].b += color.b * weight
         }
 
-        let saturation = delta / (1 - abs(2 * lightness - 1))
-        let hue: CGFloat
-        if maximum == color.red {
-            hue = ((color.green - color.blue) / delta).truncatingRemainder(dividingBy: 6) / 6
-        } else if maximum == color.green {
-            hue = (((color.blue - color.red) / delta) + 2) / 6
-        } else {
-            hue = (((color.red - color.green) / delta) + 4) / 6
+        let averageLightness = visibleArea > 0 ? lightness / visibleArea : 0.9
+        let t = min(1, max(0, (averageLightness - 0.4) / 0.4))
+        let backgroundLightness = 0.32 + 0.54 * t * t * (3 - 2 * t)
+        var best = HueGroup()
+        // Include adjacent hue bins so colors near a bin boundary stay together.
+        for index in 0..<count {
+            var candidate = HueGroup()
+            for offset in -1...1 {
+                let group = groups[(index + offset + count) % count]
+                let influence = offset == 0 ? 1.0 : 0.5
+                candidate.weight += group.weight * influence
+                candidate.area += group.area
+                candidate.a += group.a * influence
+                candidate.b += group.b * influence
+            }
+            // Tiny status icons must not tint an otherwise neutral screenshot.
+            if candidate.area >= visibleArea * 0.015, candidate.weight > best.weight {
+                best = candidate
+            }
         }
-        return HSLColor(
-            hue: wrappedHue(hue),
-            saturation: min(1, max(0, saturation)),
-            lightness: min(1, max(0, lightness))
-        )
-    }
-
-    private static func rgb(hue: CGFloat, saturation: CGFloat, lightness: CGFloat) -> RGBColor {
-        guard saturation > 0.0001 else {
-            return RGBColor(red: lightness, green: lightness, blue: lightness)
+        guard best.weight > 0 else {
+            return LabColor(lightness: backgroundLightness, a: 0, b: 0)
         }
-        let q = lightness < 0.5
-            ? lightness * (1 + saturation)
-            : lightness + saturation - lightness * saturation
-        let p = 2 * lightness - q
-        return RGBColor(
-            red: hueChannel(p: p, q: q, hue: hue + 1 / 3),
-            green: hueChannel(p: p, q: q, hue: hue),
-            blue: hueChannel(p: p, q: q, hue: hue - 1 / 3)
-        )
-    }
-
-    private static func hueChannel(p: CGFloat, q: CGFloat, hue: CGFloat) -> CGFloat {
-        let hue = wrappedHue(hue)
-        if hue < 1 / 6 { return p + (q - p) * 6 * hue }
-        if hue < 1 / 2 { return q }
-        if hue < 2 / 3 { return p + (q - p) * (2 / 3 - hue) * 6 }
-        return p
-    }
-
-    private static func wrappedHue(_ hue: CGFloat) -> CGFloat {
-        let remainder = hue.truncatingRemainder(dividingBy: 1)
-        return remainder < 0 ? remainder + 1 : remainder
-    }
-
-    private static func mix(_ color: RGBColor, with other: RGBColor, amount: CGFloat) -> RGBColor {
-        RGBColor(
-            red: color.red + (other.red - color.red) * amount,
-            green: color.green + (other.green - color.green) * amount,
-            blue: color.blue + (other.blue - color.blue) * amount
-        )
-    }
-
-    private static func cgColor(_ color: RGBColor, alpha: CGFloat = 1) -> CGColor {
-        CGColor(
-            colorSpace: CGColorSpace(name: CGColorSpace.sRGB)!,
-            components: [color.red, color.green, color.blue, alpha]
-        )!
+        let a = best.a / best.weight, b = best.b / best.weight
+        let chroma = hypot(a, b)
+        let targetChroma = min(0.075, chroma * 0.55)
+        let scale = targetChroma / max(chroma, 0.0001)
+        return LabColor(lightness: backgroundLightness, a: a * scale, b: b * scale)
     }
 }

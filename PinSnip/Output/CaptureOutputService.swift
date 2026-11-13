@@ -48,9 +48,46 @@ enum CaptureOutputService {
         return image
     }
 
-    static func copyGIF(_ data: Data, to pasteboard: NSPasteboard = .general) {
-        if ClipboardWriter.writeGIF(data, to: pasteboard) == nil {
-            NSSound.beep()
+    private static var isCopyingGIF = false
+
+    static func copyGIF(
+        _ data: Data,
+        to pasteboard: NSPasteboard = .general,
+        completion: @escaping (Bool) -> Void = { _ in }
+    ) {
+        guard !isCopyingGIF else { completion(false); return }
+        isCopyingGIF = true
+        let settings = GIFShareSettingsStore().load()
+        let progress = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 90),
+                               styleMask: [.titled], backing: .buffered, defer: false)
+        progress.title = "准备分享动图"
+        progress.isReleasedWhenClosed = false
+        let spinner = NSProgressIndicator(frame: NSRect(x: 24, y: 33, width: 24, height: 24))
+        spinner.style = .spinning
+        spinner.startAnimation(nil)
+        let label = NSTextField(labelWithString: "正在按设置压缩，请稍候…")
+        label.frame = NSRect(x: 62, y: 35, width: 220, height: 20)
+        progress.contentView?.addSubview(spinner)
+        progress.contentView?.addSubview(label)
+        progress.center()
+        progress.orderFrontRegardless()
+        Task {
+            defer { isCopyingGIF = false; progress.close() }
+            do {
+                let prepared = try await Task.detached(priority: .userInitiated) {
+                    try GIFShareEncoder.encode(data, settings: settings)
+                }.value
+                guard ClipboardWriter.writePreparedGIF(prepared, to: pasteboard, includesGIFData: true) != nil else {
+                    throw CocoaError(.fileWriteUnknown)
+                }
+                completion(true)
+            } catch {
+                progress.close()
+                let alert = NSAlert(error: error)
+                alert.messageText = "无法复制动图"
+                alert.runModal()
+                completion(false)
+            }
         }
     }
 
