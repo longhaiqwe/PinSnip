@@ -370,6 +370,35 @@ final class TextAnnotationInteractionTests: XCTestCase {
     }
 
     @MainActor
+    func testPlaceholderHidesDuringInputMethodCompositionAndReturnsWhenCleared() throws {
+        let (window, editor, rect) = makeEditor()
+        defer { window.close() }
+        editor.focus(selectAll: false)
+        let textView = try XCTUnwrap(editor.hitTest(CGPoint(x: rect.midX, y: rect.midY)) as? NSTextView)
+        let placeholder = try XCTUnwrap(editor.subviews.compactMap { $0 as? NSTextField }.first)
+        let replacement = NSRange(location: NSNotFound, length: 0)
+
+        XCTAssertFalse(placeholder.isHidden)
+        textView.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: replacement)
+        XCTAssertTrue(textView.hasMarkedText())
+        XCTAssertTrue(placeholder.isHidden, "Composition should hide the hint before a candidate is committed")
+
+        textView.insertText("你", replacementRange: replacement)
+        XCTAssertEqual(editor.text, "你")
+        XCTAssertTrue(placeholder.isHidden)
+
+        textView.deleteBackward(nil)
+        XCTAssertTrue(editor.text.isEmpty)
+        XCTAssertFalse(placeholder.isHidden)
+
+        textView.setMarkedText("ni", selectedRange: NSRange(location: 2, length: 0), replacementRange: replacement)
+        textView.setMarkedText("", selectedRange: NSRange(location: 0, length: 0), replacementRange: replacement)
+        XCTAssertFalse(textView.hasMarkedText())
+        XCTAssertTrue(editor.text.isEmpty)
+        XCTAssertFalse(placeholder.isHidden)
+    }
+
+    @MainActor
     func testHitTestingUsesSuperviewCoordinatesAwayFromOrigin() {
         let (window, editor, rect) = makeEditor()
         defer { window.close() }

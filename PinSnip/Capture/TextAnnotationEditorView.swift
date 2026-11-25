@@ -9,7 +9,7 @@ final class TextAnnotationEditorView: NSView, NSTextViewDelegate {
     }
 
     private static let chromeInset = TextAnnotationLayout.chromeInset
-    private let textView = NSTextView()
+    private let textView = TextAnnotationInputView()
     private let placeholder = NSTextField(labelWithString: "输入文字")
     private var dragMode: DragMode?
     private var dragHasStarted = false
@@ -52,6 +52,7 @@ final class TextAnnotationEditorView: NSView, NSTextViewDelegate {
         textView.textContainer?.lineBreakMode = .byWordWrapping
         textView.textContainer?.lineFragmentPadding = 0
         textView.delegate = self
+        textView.onCompositionChange = { [weak self] in self?.updatePlaceholder() }
         addSubview(textView)
 
         placeholder.font = font
@@ -238,6 +239,16 @@ final class TextAnnotationEditorView: NSView, NSTextViewDelegate {
 
     private func updatePlaceholder() {
         placeholder.isHidden = !textView.string.isEmpty
+    }
+}
+
+private final class TextAnnotationInputView: NSTextView {
+    var onCompositionChange: (() -> Void)?
+
+    override func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
+        super.setMarkedText(string, selectedRange: selectedRange, replacementRange: replacementRange)
+        // Input method composition can change the visible text without calling textDidChange.
+        onCompositionChange?()
     }
 }
 

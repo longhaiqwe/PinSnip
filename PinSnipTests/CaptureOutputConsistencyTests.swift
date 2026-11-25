@@ -103,7 +103,6 @@ final class CaptureOutputConsistencyTests: XCTestCase {
         let source = try selectionOverlaySource()
 
         XCTAssertTrue(source.contains("final class TextAnnotationEditorView"))
-        XCTAssertTrue(source.contains("private let textView = NSTextView"))
         XCTAssertTrue(source.contains("textContainer?.widthTracksTextView = true"))
         XCTAssertTrue(source.contains("textView.drawsBackground = false"))
         XCTAssertTrue(source.contains("drawEditorChrome()"))
